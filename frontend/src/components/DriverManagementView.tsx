@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useCMS } from '../context/CMSContext';
 import { Driver, DriverDraft, Vehicle, User, Vendor, Trip, Booking } from '../types';
-import { api } from '../api/client';
+import { api, API_URL } from '../api/client';
 import AddDriverForm from './drivers/AddDriverForm';
 import {
   Search,
@@ -639,7 +639,7 @@ export default function DriverManagementView() {
     
     let absoluteUrl = fileUrl;
     if (!fileUrl.startsWith('http')) {
-      absoluteUrl = `http://localhost:8000${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+      absoluteUrl = `${API_URL.replace('/api', '')}${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
     }
     console.log("documentUrl", absoluteUrl);
 

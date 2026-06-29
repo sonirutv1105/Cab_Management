@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Settings:
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000,http://localhost:5173")
     DB_HOST: str = os.getenv("DB_HOST", "localhost")
     DB_PORT: str = os.getenv("DB_PORT", "3306")
     DB_NAME: str = os.getenv("DB_NAME", "cab_management")

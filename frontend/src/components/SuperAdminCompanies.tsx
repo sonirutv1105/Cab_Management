@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_URL } from '../api/client';
 import {
   Building2,
   CheckCircle2,
@@ -95,7 +96,7 @@ export default function SuperAdminCompanies() {
     if (['view', 'edit', 'subscription'].includes(type)) {
       try {
         const token = localStorage.getItem('super_admin_auth');
-        const res = await fetch(`http://localhost:8000/api/super-admin/companies/${company.id}`, { 
+        const res = await fetch(`${API_URL}/super-admin/companies/${company.id}`, { 
           headers: { 'Authorization': `Bearer ${token}` } 
         });
         if (res.ok) {
@@ -121,8 +122,8 @@ export default function SuperAdminCompanies() {
     try {
       const token = localStorage.getItem('super_admin_auth');
       const [compRes, statsRes] = await Promise.all([
-        fetch('http://localhost:8000/api/super-admin/companies', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('http://localhost:8000/api/super-admin/dashboard-stats', { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch(`${API_URL}/super-admin/companies`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_URL}/super-admin/dashboard-stats`, { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
       if (compRes.ok) setCompaniesData(await compRes.json());
       if (statsRes.ok) {
@@ -149,7 +150,7 @@ export default function SuperAdminCompanies() {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('super_admin_auth');
-      const res = await fetch(`http://localhost:8000/api/super-admin/companies/${id}/status`, {
+      const res = await fetch(`${API_URL}/super-admin/companies/${id}/status`, {
         method: 'PUT',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -178,7 +179,7 @@ export default function SuperAdminCompanies() {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('super_admin_auth');
-      const res = await fetch(`http://localhost:8000/api/super-admin/companies/${selectedCompanyId}`, {
+      const res = await fetch(`${API_URL}/super-admin/companies/${selectedCompanyId}`, {
         method: 'PUT',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -206,7 +207,7 @@ export default function SuperAdminCompanies() {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('super_admin_auth');
-      const res = await fetch(`http://localhost:8000/api/super-admin/companies/${selectedCompanyId}/subscription`, {
+      const res = await fetch(`${API_URL}/super-admin/companies/${selectedCompanyId}/subscription`, {
         method: 'PUT',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -238,7 +239,7 @@ export default function SuperAdminCompanies() {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('super_admin_auth');
-      const res = await fetch(`http://localhost:8000/api/super-admin/companies/${selectedCompanyId}/reset-password`, {
+      const res = await fetch(`${API_URL}/super-admin/companies/${selectedCompanyId}/reset-password`, {
         method: 'PUT',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -272,7 +273,7 @@ export default function SuperAdminCompanies() {
     
     try {
       const token = localStorage.getItem('super_admin_auth');
-      const res = await fetch('http://localhost:8000/api/super-admin/companies/import/preview', {
+      const res = await fetch(`${API_URL}/super-admin/companies/import/preview`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData
@@ -307,7 +308,7 @@ export default function SuperAdminCompanies() {
     
     try {
       const token = localStorage.getItem('super_admin_auth');
-      const res = await fetch('http://localhost:8000/api/super-admin/companies/import/confirm', {
+      const res = await fetch(`${API_URL}/super-admin/companies/import/confirm`, {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -343,7 +344,7 @@ export default function SuperAdminCompanies() {
       if (searchTerm) queryParams.append('search', searchTerm);
       if (statusFilter) queryParams.append('status_filter', statusFilter);
       
-      const res = await fetch(`http://localhost:8000/api/super-admin/companies/export?${queryParams.toString()}`, {
+      const res = await fetch(`${API_URL}/super-admin/companies/export?${queryParams.toString()}`, {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${token}` }
       });

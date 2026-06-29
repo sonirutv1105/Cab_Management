@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_URL } from '../api/client';
 import { 
   Building2, 
   User, 
@@ -102,7 +103,7 @@ export default function SuperAdminAddCompany({ onBack }: { onBack?: () => void }
   const handleCreate = async () => {
     try {
       const token = localStorage.getItem('super_admin_auth');
-      const res = await fetch('http://localhost:8000/api/super-admin/companies', {
+      const res = await fetch(`${API_URL}/super-admin/companies`, {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`,

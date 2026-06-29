@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from config.settings import settings
 from database.db import engine
 from models import all_models as models
 from routes.all_routes import (
@@ -51,7 +52,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=[origin.strip() for origin in settings.FRONTEND_URL.split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

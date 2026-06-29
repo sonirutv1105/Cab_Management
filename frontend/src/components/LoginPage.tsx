@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_URL } from '../api/client';
 import { useCMS } from '../context/CMSContext';
 
 export default function LoginPage() {
@@ -17,7 +18,7 @@ export default function LoginPage() {
       // Check if trying to log in as Super Admin
       if (email === 'admin@superadmin.com' || email.includes('superadmin')) {
         try {
-          const res = await fetch('http://localhost:8000/api/super-admin/login', {
+          const res = await fetch(`${API_URL}/super-admin/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })

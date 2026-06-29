@@ -1,9 +1,30 @@
+# Node.js
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-*.pyc
-venv/
 .venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+
+# Environment Variables
 .env
-node_modules/
+.env.*
+!.env.example
+
+# OS Files
 .DS_Store
+Thumbs.db
+
+# Project specifics
+uploads/
