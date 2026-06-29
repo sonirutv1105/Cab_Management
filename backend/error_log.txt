@@ -2065,3 +2065,9 @@ POST http://localhost:8000/api/audit-logs/ -> 401
 POST http://localhost:8000/api/auth/login -> 401
 POST http://localhost:8000/api/auth/login -> 401
 POST http://localhost:8000/api/super-admin/companies -> 400
+GET http://localhost:8000/api/super-admin/dashboard-stats -> 401
+GET http://localhost:8000/api/super-admin/dashboard-stats -> 401
+GET http://localhost:8000/api/drivers/ -> 403
+GET http://localhost:8000/api/vehicles/ -> 403
+POST http://localhost:8000/api/audit-logs/ -> 401
+POST http://localhost:8000/api/auth/login -> 401
