@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Boolean, Float, DateTime, Text, ForeignKey
+from sqlalchemy import Column, String, Integer, Boolean, Float, DateTime, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database.db import Base
 
@@ -45,6 +45,7 @@ class Subscription(Base):
 
 class Role(Base):
     __tablename__ = "roles"
+    __table_args__ = (UniqueConstraint('company_id', 'name', name='uq_roles_company_id_name'),)
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
     company_id = Column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), index=True)
     name = Column(String(100))
@@ -52,6 +53,7 @@ class Role(Base):
 
 class Permission(Base):
     __tablename__ = "permissions"
+    __table_args__ = (UniqueConstraint('role_id', 'module', 'action', name='uq_permissions_role_id_module_action'),)
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
     role_id = Column(Integer, ForeignKey('roles.id', ondelete='CASCADE'), index=True)
     module = Column(String(100))

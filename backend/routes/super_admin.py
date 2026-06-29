@@ -1119,3 +1119,87 @@ def admin_reply_ticket(id: int, reply: schemas.TicketMessageCreate, current_admi
     db.refresh(msg)
     setattr(msg, "attachments", [])
     return msg
+
+DEFAULT_MATRIX_MODULES = [
+    'dashboard', 'driver_management', 'vehicle_management', 'trip_management', 
+    'vendor_management', 'booking_management', 'live_tracking', 'fuel_management', 
+    'maintenance_management', 'compliance_management', 'contract_management', 
+    'reports_analytics', 'notifications', 'support_tickets', 'audit_logs', 
+    'company_settings', 'user_roles'
+]
+DEFAULT_MATRIX_ACTIONS = ['view', 'create', 'update', 'delete', 'import', 'export']
+
+def build_full_matrix(db_perms):
+    existing_map = {(p.module, p.action): True for p in db_perms}
+    full_matrix = []
+    for m in DEFAULT_MATRIX_MODULES:
+        for a in DEFAULT_MATRIX_ACTIONS:
+            full_matrix.append({
+                "module": m,
+                "action": a,
+                "enabled": existing_map.get((m, a), False)
+            })
+    return full_matrix
+
+@super_admin_router.get("/matrix-permissions")
+def get_matrix_permissions(company_id: int, role_name: str, current_admin: SuperAdmin = Depends(get_current_admin), db: Session = Depends(get_db)):
+    try:
+        role = db.query(Role).filter(Role.company_id == company_id, Role.name == role_name).first()
+        is_new_role = False
+        if not role:
+            role = Role(name=role_name, description=f"{role_name.replace('_', ' ').title()} Role", company_id=company_id)
+            db.add(role)
+            db.commit()
+            db.refresh(role)
+            is_new_role = True
+
+        if is_new_role:
+            new_perms = []
+            for m in DEFAULT_MATRIX_MODULES:
+                for a in DEFAULT_MATRIX_ACTIONS:
+                    new_perms.append(Permission(role_id=role.id, module=m, action=a))
+            if new_perms:
+                db.bulk_save_objects(new_perms)
+                db.commit()
+            
+        perms = db.query(Permission).filter(Permission.role_id == role.id).all()
+        return build_full_matrix(perms)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@super_admin_router.put("/matrix-permissions")
+def update_matrix_permissions(company_id: int, role_name: str, permissions: List[PermissionUpdate], request: Request, current_admin: SuperAdmin = Depends(get_current_admin), db: Session = Depends(get_db)):
+    try:
+        role = db.query(Role).filter(Role.company_id == company_id, Role.name == role_name).first()
+        if not role:
+            role = Role(name=role_name, description=f"{role_name.replace('_', ' ').title()} Role", company_id=company_id)
+            db.add(role)
+            db.flush()
+            log_auth_event(db, request, current_admin.email, "super_admin", f"Created Auto-Role: {role_name} for Company {company_id}", "Success", current_admin.name, "CMS Enterprise")
+
+        existing_perms = db.query(Permission).filter(Permission.role_id == role.id).all()
+        existing_map = {(p.module, p.action): p for p in existing_perms}
+
+        seen = set()
+        for p in permissions:
+            key = (p.module, p.action)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            if key in existing_map:
+                if not p.enabled:
+                    db.delete(existing_map[key])
+            else:
+                if p.enabled:
+                    db.add(Permission(role_id=role.id, module=p.module, action=p.action))
+
+        db.commit()
+        log_auth_event(db, request, current_admin.email, "super_admin", f"Updated Matrix Permissions for {role_name} (Company {company_id})", "Success", current_admin.name, "CMS Enterprise")
+        
+        updated_perms = db.query(Permission).filter(Permission.role_id == role.id).all()
+        return build_full_matrix(updated_perms)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))

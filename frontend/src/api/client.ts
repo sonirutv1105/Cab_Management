@@ -224,6 +224,8 @@ export const api = {
   deleteSuperAdminRole: (id: number) => apiClient.delete(`/super-admin/roles/${id}`).then(res => res.data),
   getSuperAdminRolePermissions: (id: number) => apiClient.get<any[]>(`/super-admin/roles/${id}/permissions`).then(res => res.data),
   updateSuperAdminRolePermissions: (id: number, permissions: any[]) => apiClient.put<any>(`/super-admin/roles/${id}/permissions`, permissions).then(res => res.data),
+  getMatrixPermissions: (companyId: number, roleName: string) => apiClient.get<any[]>(`/super-admin/matrix-permissions?company_id=${companyId}&role_name=${roleName}`).then(res => res.data),
+  updateMatrixPermissions: (companyId: number, roleName: string, permissions: any[]) => apiClient.put<any>(`/super-admin/matrix-permissions?company_id=${companyId}&role_name=${roleName}`, permissions).then(res => res.data),
 
   // ─── Dashboard ───
   getDashboardStats: () => apiClient.get<any>('/dashboard/stats').then(res => res.data),

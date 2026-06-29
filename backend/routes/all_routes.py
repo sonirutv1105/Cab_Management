@@ -277,7 +277,7 @@ def create_vehicle(vehicle: schemas.VehicleCreate, current_user: models.User = D
     return db_item
 
 @vehicle_router.delete("/{id}")
-def delete_vehicle(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_vehicle(id: int, current_user: models.User = Depends(require_permission("vehicle_management", "view")), db: Session = Depends(get_db)):
     db_item = db.query(models.Vehicle).filter(models.Vehicle.id == id, models.Vehicle.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     db.delete(db_item)
@@ -292,7 +292,7 @@ def get_drivers(current_user: models.User = Depends(require_permission("driver_m
 
 
 @driver_router.get("/{id}", response_model=schemas.DriverResponse)
-def get_driver(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_driver(id: int, current_user: models.User = Depends(require_permission("vehicle_management", "create")), db: Session = Depends(get_db)):
     db_item = db.query(models.Driver).filter(models.Driver.id == id, models.Driver.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404, detail="Driver not found")
     return db_item
@@ -323,7 +323,7 @@ def compute_driver_status(driver_dict: dict) -> str:
 
 
 @driver_router.get("/search/{license_number}", response_model=schemas.DriverResponse)
-def search_driver_by_license(license_number: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def search_driver_by_license(license_number: str, current_user: models.User = Depends(require_permission("vehicle_management", "delete")), db: Session = Depends(get_db)):
     db_item = db.query(models.Driver).filter(models.Driver.licenseNumber == license_number, models.Driver.company_id == current_user.company_id).first()
     if not db_item:
         raise HTTPException(status_code=404, detail="Driver not found")
@@ -385,7 +385,7 @@ def create_driver(driver: schemas.DriverCreate, current_user: models.User = Depe
     return db_item
 
 @driver_router.put("/{id}", response_model=schemas.DriverResponse)
-def update_driver(id: int, driver: schemas.DriverUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_driver(id: int, driver: schemas.DriverUpdate, current_user: models.User = Depends(require_permission("driver_management", "view")), db: Session = Depends(get_db)):
     db_item = db.query(models.Driver).filter(models.Driver.id == id, models.Driver.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404, detail="Driver not found")
     
@@ -488,7 +488,7 @@ def add_driver_document(
     issue_date: Optional[str] = Form(None),
     expiry_date: Optional[str] = Form(None),
     file: UploadFile = File(...),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_permission("driver_management", "create")),
     db: Session = Depends(get_db)
 ):
     driver = db.query(models.Driver).filter(models.Driver.id == driver_id).first()
@@ -544,11 +544,11 @@ def add_driver_document(
     return db_item
 
 @driver_router.get("/{driver_id}/documents", response_model=list[schemas.DriverDocumentResponse])
-def get_driver_documents(driver_id: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_driver_documents(driver_id: str, current_user: models.User = Depends(require_permission("driver_management", "view")), db: Session = Depends(get_db)):
     return db.query(models.DriverDocument).filter(models.DriverDocument.driver_id == driver_id, models.DriverDocument.is_active == True, models.DriverDocument.company_id == current_user.company_id).all()
 
 @document_router.get("/expiring", response_model=list[schemas.DriverDocumentResponse])
-def get_expiring_documents(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_expiring_documents(current_user: models.User = Depends(require_permission("driver_management", "update")), db: Session = Depends(get_db)):
     today = datetime.now()
     all_docs = db.query(models.DriverDocument).filter(models.DriverDocument.is_active == True, models.DriverDocument.company_id == current_user.company_id).all()
     expiring = []
@@ -564,7 +564,7 @@ def get_expiring_documents(current_user: models.User = Depends(get_current_user)
     return expiring
 
 @document_router.get("/expired", response_model=list[schemas.DriverDocumentResponse])
-def get_expired_documents(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_expired_documents(current_user: models.User = Depends(require_permission("driver_management", "delete")), db: Session = Depends(get_db)):
     today_str = datetime.now().strftime("%Y-%m-%d")
     return db.query(models.DriverDocument).filter(
         models.DriverDocument.is_active == True,
@@ -573,7 +573,7 @@ def get_expired_documents(current_user: models.User = Depends(get_current_user),
     ).all()
 
 @document_router.get("/{document_id}", response_model=schemas.DriverDocumentResponse)
-def get_document(document_id: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_document(document_id: str, current_user: models.User = Depends(require_permission("driver_management", "view")), db: Session = Depends(get_db)):
     db_item = db.query(models.DriverDocument).filter(models.DriverDocument.id == document_id, models.DriverDocument.is_active == True, models.DriverDocument.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404, detail="Document not found")
     return db_item
@@ -586,7 +586,7 @@ def update_document(
     issue_date: Optional[str] = Form(None),
     expiry_date: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_permission("driver_management", "update")),
     db: Session = Depends(get_db)
 ):
     db_item = db.query(models.DriverDocument).filter(models.DriverDocument.id == document_id, models.DriverDocument.is_active == True, models.DriverDocument.company_id == current_user.company_id).first()
@@ -632,7 +632,7 @@ def update_document(
     return db_item
 
 @document_router.delete("/{document_id}")
-def delete_document(document_id: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_document(document_id: str, current_user: models.User = Depends(require_permission("driver_management", "delete")), db: Session = Depends(get_db)):
     db_item = db.query(models.DriverDocument).filter(models.DriverDocument.id == document_id, models.DriverDocument.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404, detail="Document not found")
     driver_id = db_item.driver_id
@@ -643,7 +643,7 @@ def delete_document(document_id: str, current_user: models.User = Depends(get_cu
     return {"message": "Deleted"}
 
 @document_router.post("/{document_id}/verify", response_model=schemas.DriverDocumentResponse)
-def verify_document(document_id: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def verify_document(document_id: str, current_user: models.User = Depends(require_permission("driver_management", "create")), db: Session = Depends(get_db)):
     db_item = db.query(models.DriverDocument).filter(models.DriverDocument.id == document_id, models.DriverDocument.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404, detail="Document not found")
     
@@ -659,7 +659,7 @@ def verify_document(document_id: str, current_user: models.User = Depends(get_cu
     return db_item
 
 @document_router.post("/{document_id}/reject", response_model=schemas.DriverDocumentResponse)
-def reject_document(document_id: str, remarks: str = Form(...), current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def reject_document(document_id: str, remarks: str = Form(...), current_user: models.User = Depends(require_permission("driver_management", "create")), db: Session = Depends(get_db)):
     db_item = db.query(models.DriverDocument).filter(models.DriverDocument.id == document_id, models.DriverDocument.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404, detail="Document not found")
     
@@ -677,11 +677,11 @@ def reject_document(document_id: str, remarks: str = Form(...), current_user: mo
 
 # --- BOOKING ROUTES ---
 @booking_router.get("/", response_model=list[schemas.BookingResponse])
-def get_bookings(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_bookings(current_user: models.User = Depends(require_permission("booking_management", "view")), db: Session = Depends(get_db)):
     return db.query(models.Booking).filter(models.Booking.company_id == current_user.company_id).all()
 
 @booking_router.post("/", response_model=schemas.BookingResponse)
-def create_booking(booking: schemas.BookingCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_booking(booking: schemas.BookingCreate, current_user: models.User = Depends(require_permission("booking_management", "create")), db: Session = Depends(get_db)):
     booking_dict = booking.model_dump()
     booking_dict['company_id'] = current_user.company_id
     db_item = models.Booking(**booking_dict)
@@ -691,7 +691,7 @@ def create_booking(booking: schemas.BookingCreate, current_user: models.User = D
     return db_item
 
 @booking_router.delete("/{id}")
-def delete_booking(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_booking(id: int, current_user: models.User = Depends(require_permission("booking_management", "delete")), db: Session = Depends(get_db)):
     db_item = db.query(models.Booking).filter(models.Booking.id == id, models.Booking.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     db.delete(db_item)
@@ -700,11 +700,11 @@ def delete_booking(id: int, current_user: models.User = Depends(get_current_user
 
 # --- TRIP ROUTES ---
 @trip_router.get("/", response_model=list[schemas.TripResponse])
-def get_trips(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_trips(current_user: models.User = Depends(require_permission("trip_management", "view")), db: Session = Depends(get_db)):
     return db.query(models.Trip).filter(models.Trip.company_id == current_user.company_id).all()
 
 @trip_router.post("/", response_model=schemas.TripResponse)
-def create_trip(trip: schemas.TripCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_trip(trip: schemas.TripCreate, current_user: models.User = Depends(require_permission("trip_management", "create")), db: Session = Depends(get_db)):
     trip_dict = trip.model_dump()
     trip_dict['company_id'] = current_user.company_id
     db_item = models.Trip(**trip_dict)
@@ -714,7 +714,7 @@ def create_trip(trip: schemas.TripCreate, current_user: models.User = Depends(ge
     return db_item
 
 @trip_router.delete("/{id}")
-def delete_trip(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_trip(id: int, current_user: models.User = Depends(require_permission("trip_management", "delete")), db: Session = Depends(get_db)):
     db_item = db.query(models.Trip).filter(models.Trip.id == id, models.Trip.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     db.delete(db_item)
@@ -778,7 +778,7 @@ def get_contracts(
     status: Optional[str] = None,
     type: Optional[str] = None,
     department: Optional[str] = None,
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_permission("contract_management", "view")),
     db: Session = Depends(get_db)
 ):
     from sqlalchemy import or_
@@ -802,7 +802,7 @@ def get_contracts(
     return [_merge_contract_data(db, c) for c in contracts]
 
 @contract_router.post("/", response_model=schemas.ContractResponse)
-def create_contract(contract: schemas.ContractCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_contract(contract: schemas.ContractCreate, current_user: models.User = Depends(require_permission("contract_management", "create")), db: Session = Depends(get_db)):
     from fastapi import HTTPException
     
     # 6. Normalize the contract number before duplicate check
@@ -911,7 +911,7 @@ def create_contract(contract: schemas.ContractCreate, current_user: models.User 
     db.refresh(db_item)
     return _merge_contract_data(db, db_item)
 @contract_router.get("/drafts/all", response_model=list[schemas.ContractDraftResponse])
-def get_drafts(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_drafts(current_user: models.User = Depends(require_permission("contract_management", "view")), db: Session = Depends(get_db)):
     drafts = db.query(models.ContractDraft).filter(models.ContractDraft.company_id == current_user.company_id).all()
     results = []
     for d in drafts:
@@ -937,7 +937,7 @@ def get_drafts(current_user: models.User = Depends(get_current_user), db: Sessio
     return results
 
 @contract_router.get("/drafts/{id}", response_model=schemas.ContractDraftResponse)
-def get_draft(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_draft(id: int, current_user: models.User = Depends(require_permission("contract_management", "view")), db: Session = Depends(get_db)):
     d = db.query(models.ContractDraft).filter(models.ContractDraft.draft_id == id, models.ContractDraft.company_id == current_user.company_id).first()
     if not d: raise HTTPException(status_code=404, detail="Draft not found")
     
@@ -1009,7 +1009,7 @@ def _upsert_relational_draft(db, parsed_data, contract_id):
     db.commit()
 
 @contract_router.post("/drafts", response_model=schemas.ContractDraftResponse)
-def create_draft(draft: schemas.ContractDraftCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_draft(draft: schemas.ContractDraftCreate, current_user: models.User = Depends(require_permission("contract_management", "create")), db: Session = Depends(get_db)):
     try:
         parsed_data = json.loads(draft.formData)
         contract_id = draft.id # use draft.id as contract_id for simplicity
@@ -1048,7 +1048,7 @@ def create_draft(draft: schemas.ContractDraftCreate, current_user: models.User =
         raise e
 
 @contract_router.put("/drafts/{id}", response_model=schemas.ContractDraftResponse)
-def update_draft(id: int, draft: schemas.ContractDraftUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_draft(id: int, draft: schemas.ContractDraftUpdate, current_user: models.User = Depends(require_permission("contract_management", "update")), db: Session = Depends(get_db)):
     # Handled identically to POST because it's a full upsert
     parsed_data = json.loads(draft.formData)
     parsed_data['status'] = 'Draft'  # Drafts must always remain Draft status
@@ -1066,7 +1066,7 @@ def update_draft(id: int, draft: schemas.ContractDraftUpdate, current_user: mode
     return get_draft(id, db)
 
 @contract_router.delete("/drafts/{id}")
-def delete_draft(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_draft(id: int, current_user: models.User = Depends(require_permission("contract_management", "delete")), db: Session = Depends(get_db)):
     db_item = db.query(models.ContractDraft).filter(models.ContractDraft.draft_id == id, models.ContractDraft.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404, detail="Draft not found")
     
@@ -1074,7 +1074,7 @@ def delete_draft(id: int, current_user: models.User = Depends(get_current_user),
     db.commit()
     return {"message": "Draft deleted"}
 @contract_router.delete("/{id}")
-def delete_contract(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_contract(id: int, current_user: models.User = Depends(require_permission("contract_management", "delete")), db: Session = Depends(get_db)):
     db_item = db.query(models.Contract).filter(models.Contract.id == id, models.Contract.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     db.delete(db_item)
@@ -1083,11 +1083,11 @@ def delete_contract(id: int, current_user: models.User = Depends(get_current_use
 
 # --- VENDOR ROUTES ---
 @vendor_router.get("/", response_model=list[schemas.VendorResponse])
-def get_vendors(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_vendors(current_user: models.User = Depends(require_permission("vendor_management", "view")), db: Session = Depends(get_db)):
     return db.query(models.Vendor).filter(models.Vendor.company_id == current_user.company_id).all()
 
 @vendor_router.post("/", response_model=schemas.VendorResponse)
-def create_vendor(vendor: schemas.VendorCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_vendor(vendor: schemas.VendorCreate, current_user: models.User = Depends(require_permission("vendor_management", "create")), db: Session = Depends(get_db)):
     vendor_dict = vendor.model_dump()
     vendor_dict['company_id'] = current_user.company_id
     db_item = models.Vendor(**vendor_dict)
@@ -1097,7 +1097,7 @@ def create_vendor(vendor: schemas.VendorCreate, current_user: models.User = Depe
     return db_item
 
 @vendor_router.delete("/{id}")
-def delete_vendor(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_vendor(id: int, current_user: models.User = Depends(require_permission("vendor_management", "delete")), db: Session = Depends(get_db)):
     db_item = db.query(models.Vendor).filter(models.Vendor.id == id, models.Vendor.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     db.delete(db_item)
@@ -1114,13 +1114,13 @@ from services.all_services import (
 )
 
 @vehicle_router.get("/{id}", response_model=schemas.VehicleResponse)
-def get_vehicle(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_vehicle(id: int, current_user: models.User = Depends(require_permission("vehicle_management", "view")), db: Session = Depends(get_db)):
     db_item = db.query(models.Vehicle).filter(models.Vehicle.id == id, models.Vehicle.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     return db_item
 
 @vehicle_router.put("/{id}", response_model=schemas.VehicleResponse)
-def update_vehicle(id: int, payload: schemas.VehicleUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_vehicle(id: int, payload: schemas.VehicleUpdate, current_user: models.User = Depends(require_permission("vehicle_management", "update")), db: Session = Depends(get_db)):
     db_item = db.query(models.Vehicle).filter(models.Vehicle.id == id, models.Vehicle.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     for key, value in payload.model_dump(exclude_unset=True).items():
@@ -1130,13 +1130,13 @@ def update_vehicle(id: int, payload: schemas.VehicleUpdate, current_user: models
     return db_item
 
 @booking_router.get("/{id}", response_model=schemas.BookingResponse)
-def get_booking(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_booking(id: int, current_user: models.User = Depends(require_permission("booking_management", "view")), db: Session = Depends(get_db)):
     db_item = db.query(models.Booking).filter(models.Booking.id == id, models.Booking.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     return db_item
 
 @booking_router.put("/{id}", response_model=schemas.BookingResponse)
-def update_booking(id: int, payload: schemas.BookingUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_booking(id: int, payload: schemas.BookingUpdate, current_user: models.User = Depends(require_permission("booking_management", "update")), db: Session = Depends(get_db)):
     db_item = db.query(models.Booking).filter(models.Booking.id == id, models.Booking.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     for key, value in payload.model_dump(exclude_unset=True).items():
@@ -1146,13 +1146,13 @@ def update_booking(id: int, payload: schemas.BookingUpdate, current_user: models
     return db_item
 
 @trip_router.get("/{id}", response_model=schemas.TripResponse)
-def get_trip(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_trip(id: int, current_user: models.User = Depends(require_permission("trip_management", "view")), db: Session = Depends(get_db)):
     db_item = db.query(models.Trip).filter(models.Trip.id == id, models.Trip.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     return db_item
 
 @driver_router.put("/{id}", response_model=schemas.DriverResponse)
-def update_driver(id: int, payload: schemas.DriverUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_driver(id: int, payload: schemas.DriverUpdate, current_user: models.User = Depends(require_permission("driver_management", "update")), db: Session = Depends(get_db)):
     db_item = db.query(models.Driver).filter(models.Driver.id == id, models.Driver.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     
@@ -1216,7 +1216,7 @@ def update_driver(id: int, payload: schemas.DriverUpdate, current_user: models.U
     return db_item
 
 @trip_router.put("/{id}", response_model=schemas.TripResponse)
-def update_trip(id: int, payload: schemas.TripUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_trip(id: int, payload: schemas.TripUpdate, current_user: models.User = Depends(require_permission("trip_management", "update")), db: Session = Depends(get_db)):
     db_item = db.query(models.Trip).filter(models.Trip.id == id, models.Trip.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     for key, value in payload.model_dump(exclude_unset=True).items():
@@ -1226,13 +1226,13 @@ def update_trip(id: int, payload: schemas.TripUpdate, current_user: models.User 
     return db_item
 
 @contract_router.get("/{id}", response_model=schemas.ContractResponse)
-def get_contract(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_contract(id: int, current_user: models.User = Depends(require_permission("contract_management", "view")), db: Session = Depends(get_db)):
     db_item = db.query(models.Contract).filter(models.Contract.id == id, models.Contract.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     return _merge_contract_data(db, db_item)
 
 @contract_router.put("/{id}", response_model=schemas.ContractResponse)
-def update_contract(id: int, payload: schemas.ContractUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_contract(id: int, payload: schemas.ContractUpdate, current_user: models.User = Depends(require_permission("contract_management", "update")), db: Session = Depends(get_db)):
     db_item = db.query(models.Contract).filter(models.Contract.id == id, models.Contract.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     
@@ -1254,13 +1254,13 @@ def update_contract(id: int, payload: schemas.ContractUpdate, current_user: mode
     return _merge_contract_data(db, db_item)
 
 @vendor_router.get("/{id}", response_model=schemas.VendorResponse)
-def get_vendor(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_vendor(id: int, current_user: models.User = Depends(require_permission("vendor_management", "view")), db: Session = Depends(get_db)):
     db_item = db.query(models.Vendor).filter(models.Vendor.id == id, models.Vendor.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     return db_item
 
 @vendor_router.put("/{id}", response_model=schemas.VendorResponse)
-def update_vendor(id: int, payload: schemas.VendorUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_vendor(id: int, payload: schemas.VendorUpdate, current_user: models.User = Depends(require_permission("vendor_management", "update")), db: Session = Depends(get_db)):
     db_item = db.query(models.Vendor).filter(models.Vendor.id == id, models.Vendor.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     for key, value in payload.model_dump(exclude_unset=True).items():
@@ -1283,78 +1283,78 @@ audit_log_router = APIRouter(prefix="/api/audit-logs", tags=["Audit Logs"])
 contract_activity_log_router = APIRouter(prefix="/api/contract-activity", tags=["Contract Activity Logs"])
 
 NEW_ROUTERS = [
-    (fuel_log_router, fuel_log_service, schemas.FuelLogCreate, schemas.FuelLogUpdate, schemas.FuelLogResponse),
-    (maintenance_log_router, maintenance_log_service, schemas.MaintenanceLogCreate, schemas.MaintenanceLogUpdate, schemas.MaintenanceLogResponse),
-    (compliance_doc_router, compliance_doc_service, schemas.ComplianceDocCreate, schemas.ComplianceDocUpdate, schemas.ComplianceDocResponse),
-    (app_notification_router, app_notification_service, schemas.AppNotificationCreate, schemas.AppNotificationUpdate, schemas.AppNotificationResponse),
-    (system_setting_router, system_setting_service, schemas.SystemSettingCreate, schemas.SystemSettingUpdate, schemas.SystemSettingResponse),
-    (contract_service_router, contract_service_service, schemas.ContractServiceCreate, schemas.ContractServiceUpdate, schemas.ContractServiceResponse),
-    (contract_document_router, contract_document_service, schemas.ContractDocumentCreate, schemas.ContractDocumentUpdate, schemas.ContractDocumentResponse),
-    (contract_note_router, contract_note_service, schemas.ContractNoteCreate, schemas.ContractNoteUpdate, schemas.ContractNoteResponse),
-    (contract_payment_router, contract_payment_service, schemas.ContractPaymentCreate, schemas.ContractPaymentUpdate, schemas.ContractPaymentResponse)
+    (fuel_log_router, fuel_log_service, schemas.FuelLogCreate, schemas.FuelLogUpdate, schemas.FuelLogResponse, "fuel_management"),
+    (maintenance_log_router, maintenance_log_service, schemas.MaintenanceLogCreate, schemas.MaintenanceLogUpdate, schemas.MaintenanceLogResponse, "maintenance_management"),
+    (compliance_doc_router, compliance_doc_service, schemas.ComplianceDocCreate, schemas.ComplianceDocUpdate, schemas.ComplianceDocResponse, "compliance_management"),
+    (app_notification_router, app_notification_service, schemas.AppNotificationCreate, schemas.AppNotificationUpdate, schemas.AppNotificationResponse, "notifications"),
+    (system_setting_router, system_setting_service, schemas.SystemSettingCreate, schemas.SystemSettingUpdate, schemas.SystemSettingResponse, "company_settings"),
+    (contract_service_router, contract_service_service, schemas.ContractServiceCreate, schemas.ContractServiceUpdate, schemas.ContractServiceResponse, "contract_management"),
+    (contract_document_router, contract_document_service, schemas.ContractDocumentCreate, schemas.ContractDocumentUpdate, schemas.ContractDocumentResponse, "contract_management"),
+    (contract_note_router, contract_note_service, schemas.ContractNoteCreate, schemas.ContractNoteUpdate, schemas.ContractNoteResponse, "contract_management"),
+    (contract_payment_router, contract_payment_service, schemas.ContractPaymentCreate, schemas.ContractPaymentUpdate, schemas.ContractPaymentResponse, "contract_management")
 ]
 
-def make_crud_routes(router, service, create_schema, update_schema, response_schema):
+def make_crud_routes(router, service, create_schema, update_schema, response_schema, module_name: str):
     @router.get("/", response_model=list[response_schema])
-    def get_all(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db), skip: int = 0, limit: int = 100):
+    def get_all(current_user: models.User = Depends(require_permission(module_name, "view")), db: Session = Depends(get_db), skip: int = 0, limit: int = 100):
         return service.get_multi(db, skip=skip, limit=limit, company_id=current_user.company_id)
 
     @router.get("/{id}", response_model=response_schema)
-    def get_one(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    def get_one(id: int, current_user: models.User = Depends(require_permission(module_name, "view")), db: Session = Depends(get_db)):
         return service.get(db, id, company_id=current_user.company_id)
 
     @router.post("/", response_model=response_schema)
-    def create_one(payload: create_schema, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    def create_one(payload: create_schema, current_user: models.User = Depends(require_permission(module_name, "create")), db: Session = Depends(get_db)):
         return service.create(db, payload, company_id=current_user.company_id)
 
     @router.put("/{id}", response_model=response_schema)
-    def update_one(id: int, payload: update_schema, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    def update_one(id: int, payload: update_schema, current_user: models.User = Depends(require_permission(module_name, "update")), db: Session = Depends(get_db)):
         return service.update(db, id, payload, company_id=current_user.company_id)
 
     @router.delete("/{id}")
-    def delete_one(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    def delete_one(id: int, current_user: models.User = Depends(require_permission(module_name, "delete")), db: Session = Depends(get_db)):
         service.delete(db, id, company_id=current_user.company_id)
         return {"message": "Deleted"}
 
-for r, s, c_s, u_s, r_s in NEW_ROUTERS:
-    make_crud_routes(r, s, c_s, u_s, r_s)
+for r, s, c_s, u_s, r_s, mod_name in NEW_ROUTERS:
+    make_crud_routes(r, s, c_s, u_s, r_s, mod_name)
 
 # Read Only Modules
 READ_ONLY_ROUTERS = [
-    (audit_log_router, audit_log_service, schemas.AuditLogCreate, schemas.AuditLogResponse),
-    (contract_activity_log_router, contract_activity_log_service, schemas.ContractActivityLogCreate, schemas.ContractActivityLogResponse)
+    (audit_log_router, audit_log_service, schemas.AuditLogCreate, schemas.AuditLogResponse, "audit_logs"),
+    (contract_activity_log_router, contract_activity_log_service, schemas.ContractActivityLogCreate, schemas.ContractActivityLogResponse, "contract_management")
 ]
 
-def make_read_routes(router, service, create_schema, response_schema):
+def make_read_routes(router, service, create_schema, response_schema, module_name: str):
     @router.get("/", response_model=list[response_schema])
-    def get_all(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db), skip: int = 0, limit: int = 100):
+    def get_all(current_user: models.User = Depends(require_permission(module_name, "view")), db: Session = Depends(get_db), skip: int = 0, limit: int = 100):
         return service.get_multi(db, skip=skip, limit=limit, company_id=current_user.company_id)
 
     @router.get("/{id}", response_model=response_schema)
-    def get_one(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    def get_one(id: int, current_user: models.User = Depends(require_permission(module_name, "view")), db: Session = Depends(get_db)):
         return service.get(db, id, company_id=current_user.company_id)
 
     @router.post("/", response_model=response_schema)
-    def create_one(payload: create_schema, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    def create_one(payload: create_schema, current_user: models.User = Depends(require_permission(module_name, "create")), db: Session = Depends(get_db)):
         return service.create(db, payload, company_id=current_user.company_id)
 
-for r, s, c_s, r_s in READ_ONLY_ROUTERS:
-    make_read_routes(r, s, c_s, r_s)
+for r, s, c_s, r_s, mod_name in READ_ONLY_ROUTERS:
+    make_read_routes(r, s, c_s, r_s, mod_name)
 
-def generate_crud_routes(router, model, create_schema, update_schema, response_schema):
+def generate_crud_routes(router, model, create_schema, update_schema, response_schema, module_name: str):
     @router.get("/", response_model=list[response_schema])
-    def get_all(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    def get_all(current_user: models.User = Depends(require_permission(module_name, "view")), db: Session = Depends(get_db)):
         return db.query(model).filter(model.company_id == current_user.company_id).all()
 
     @router.get("/{id}", response_model=response_schema)
-    def get_by_id(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    def get_by_id(id: int, current_user: models.User = Depends(require_permission(module_name, "view")), db: Session = Depends(get_db)):
         db_item = db.query(model).filter(model.id == id, model.company_id == current_user.company_id).first()
         if not db_item:
             raise HTTPException(status_code=404, detail="Item not found")
         return db_item
 
     @router.post("/", response_model=response_schema)
-    def create_item(item: create_schema, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    def create_item(item: create_schema, current_user: models.User = Depends(require_permission(module_name, "create")), db: Session = Depends(get_db)):
         item_dict = item.model_dump()
         item_dict['company_id'] = current_user.company_id
         db_item = model(**item_dict)
@@ -1364,7 +1364,7 @@ def generate_crud_routes(router, model, create_schema, update_schema, response_s
         return db_item
 
     @router.put("/{id}", response_model=response_schema)
-    def update_item(id: int, payload: update_schema, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    def update_item(id: int, payload: update_schema, current_user: models.User = Depends(require_permission(module_name, "update")), db: Session = Depends(get_db)):
         db_item = db.query(model).filter(model.id == id, model.company_id == current_user.company_id).first()
         if not db_item:
             raise HTTPException(status_code=404, detail="Item not found")
@@ -1375,7 +1375,7 @@ def generate_crud_routes(router, model, create_schema, update_schema, response_s
         return db_item
 
     @router.delete("/{id}")
-    def delete_item(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    def delete_item(id: int, current_user: models.User = Depends(require_permission(module_name, "delete")), db: Session = Depends(get_db)):
         db_item = db.query(model).filter(model.id == id, model.company_id == current_user.company_id).first()
         if not db_item:
             raise HTTPException(status_code=404, detail="Item not found")
@@ -1392,25 +1392,25 @@ contract_vehicle_req_router = APIRouter(prefix="/api/contract-vehicle-reqs", tag
 contract_sla_router = APIRouter(prefix="/api/contract-slas", tags=["Contract SLAs"])
 contract_renewal_router = APIRouter(prefix="/api/contract-renewals", tags=["Contract Renewals"])
 
-generate_crud_routes(contract_buyer_router, models.ContractBuyerDetail, schemas.ContractBuyerDetailCreate, schemas.ContractBuyerDetailUpdate, schemas.ContractBuyerDetailResponse)
-generate_crud_routes(contract_client_router, models.ContractClientDetail, schemas.ContractClientDetailCreate, schemas.ContractClientDetailUpdate, schemas.ContractClientDetailResponse)
-generate_crud_routes(contract_financial_router, models.ContractFinancial, schemas.ContractFinancialCreate, schemas.ContractFinancialUpdate, schemas.ContractFinancialResponse)
-generate_crud_routes(contract_consignee_router, models.ContractConsigneeDetail, schemas.ContractConsigneeDetailCreate, schemas.ContractConsigneeDetailUpdate, schemas.ContractConsigneeDetailResponse)
-generate_crud_routes(contract_vehicle_req_router, models.ContractVehicleRequirement, schemas.ContractVehicleRequirementCreate, schemas.ContractVehicleRequirementUpdate, schemas.ContractVehicleRequirementResponse)
-generate_crud_routes(contract_sla_router, models.ContractSlaCompliance, schemas.ContractSlaComplianceCreate, schemas.ContractSlaComplianceUpdate, schemas.ContractSlaComplianceResponse)
+generate_crud_routes(contract_buyer_router, models.ContractBuyerDetail, schemas.ContractBuyerDetailCreate, schemas.ContractBuyerDetailUpdate, schemas.ContractBuyerDetailResponse, "contract_management")
+generate_crud_routes(contract_client_router, models.ContractClientDetail, schemas.ContractClientDetailCreate, schemas.ContractClientDetailUpdate, schemas.ContractClientDetailResponse, "contract_management")
+generate_crud_routes(contract_financial_router, models.ContractFinancial, schemas.ContractFinancialCreate, schemas.ContractFinancialUpdate, schemas.ContractFinancialResponse, "contract_management")
+generate_crud_routes(contract_consignee_router, models.ContractConsigneeDetail, schemas.ContractConsigneeDetailCreate, schemas.ContractConsigneeDetailUpdate, schemas.ContractConsigneeDetailResponse, "contract_management")
+generate_crud_routes(contract_vehicle_req_router, models.ContractVehicleRequirement, schemas.ContractVehicleRequirementCreate, schemas.ContractVehicleRequirementUpdate, schemas.ContractVehicleRequirementResponse, "contract_management")
+generate_crud_routes(contract_sla_router, models.ContractSlaCompliance, schemas.ContractSlaComplianceCreate, schemas.ContractSlaComplianceUpdate, schemas.ContractSlaComplianceResponse, "contract_management")
 # --- DRIVER DRAFTS ROUTES ---
 @driver_draft_router.get("/", response_model=list[schemas.DriverDraftResponse])
-def get_driver_drafts(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_driver_drafts(current_user: models.User = Depends(require_permission("driver_management", "view")), db: Session = Depends(get_db)):
     return db.query(models.DriverDraft).filter(models.DriverDraft.company_id == current_user.company_id).all()
 
 @driver_draft_router.get("/{id}", response_model=schemas.DriverDraftResponse)
-def get_driver_draft(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_driver_draft(id: int, current_user: models.User = Depends(require_permission("driver_management", "view")), db: Session = Depends(get_db)):
     db_item = db.query(models.DriverDraft).filter(models.DriverDraft.draft_id == id, models.DriverDraft.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404, detail="Draft not found")
     return db_item
 
 @driver_draft_router.post("/", response_model=schemas.DriverDraftResponse)
-def create_driver_draft(draft: schemas.DriverDraftCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_driver_draft(draft: schemas.DriverDraftCreate, current_user: models.User = Depends(require_permission("driver_management", "create")), db: Session = Depends(get_db)):
     draft_dict = draft.model_dump()
     if not draft_dict.get('license_number') or draft_dict['license_number'].strip() == "":
         draft_dict['license_number'] = f"DRAFT_{draft.draft_id}"
@@ -1433,7 +1433,7 @@ def create_driver_draft(draft: schemas.DriverDraftCreate, current_user: models.U
     return db_item
 
 @driver_draft_router.put("/{id}", response_model=schemas.DriverDraftResponse)
-def update_driver_draft(id: int, draft: schemas.DriverDraftUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_driver_draft(id: int, draft: schemas.DriverDraftUpdate, current_user: models.User = Depends(require_permission("driver_management", "update")), db: Session = Depends(get_db)):
     db_item = db.query(models.DriverDraft).filter(models.DriverDraft.draft_id == id, models.DriverDraft.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404, detail="Draft not found")
     
@@ -1449,7 +1449,7 @@ def update_driver_draft(id: int, draft: schemas.DriverDraftUpdate, current_user:
     return db_item
 
 @driver_draft_router.delete("/{id}")
-def delete_driver_draft(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_driver_draft(id: int, current_user: models.User = Depends(require_permission("driver_management", "delete")), db: Session = Depends(get_db)):
     db_item = db.query(models.DriverDraft).filter(models.DriverDraft.draft_id == id, models.DriverDraft.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404, detail="Draft not found")
     db.delete(db_item)
@@ -1457,7 +1457,7 @@ def delete_driver_draft(id: int, current_user: models.User = Depends(get_current
     return {"message": "Draft Deleted"}
 
 @driver_draft_router.post("/{id}/convert", response_model=schemas.DriverResponse)
-def convert_driver_draft(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def convert_driver_draft(id: int, current_user: models.User = Depends(require_permission("driver_management", "create")), db: Session = Depends(get_db)):
     db_item = db.query(models.DriverDraft).filter(models.DriverDraft.draft_id == id, models.DriverDraft.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404, detail="Draft not found")
     
@@ -1545,18 +1545,18 @@ import string
 import random
 
 @user_router.get("/", response_model=List[schemas.UserResponse])
-def get_users(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_users(current_user: models.User = Depends(require_permission("user_roles", "view")), db: Session = Depends(get_db)):
     return db.query(models.User).filter(models.User.company_id == current_user.company_id).all()
 
 @user_router.get("/{id}", response_model=schemas.UserResponse)
-def get_user(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_user(id: int, current_user: models.User = Depends(require_permission("user_roles", "view")), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.id == id, models.User.company_id == current_user.company_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
 @user_router.post("/", response_model=schemas.UserResponse)
-def create_user(user: schemas.UserCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_user(user: schemas.UserCreate, current_user: models.User = Depends(require_permission("user_roles", "create")), db: Session = Depends(get_db)):
     existing_user = db.query(models.User).filter(models.User.email == user.email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -1581,7 +1581,7 @@ def create_user(user: schemas.UserCreate, current_user: models.User = Depends(ge
     return db_user
 
 @user_router.put("/{id}", response_model=schemas.UserResponse)
-def update_user(id: int, user: schemas.UserUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_user(id: int, user: schemas.UserUpdate, current_user: models.User = Depends(require_permission("user_roles", "update")), db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.id == id, models.User.company_id == current_user.company_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1602,7 +1602,7 @@ def update_user(id: int, user: schemas.UserUpdate, current_user: models.User = D
     return db_user
 
 @user_router.patch("/{id}/status")
-def update_user_status(id: int, status: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_user_status(id: int, status: str, current_user: models.User = Depends(require_permission("user_roles", "update")), db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.id == id, models.User.company_id == current_user.company_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1612,7 +1612,7 @@ def update_user_status(id: int, status: str, current_user: models.User = Depends
     return {"message": f"User status updated to {status}"}
 
 @user_router.delete("/{id}")
-def delete_user(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_user(id: int, current_user: models.User = Depends(require_permission("user_roles", "delete")), db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.id == id, models.User.company_id == current_user.company_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1622,7 +1622,7 @@ def delete_user(id: int, current_user: models.User = Depends(get_current_user), 
     return {"message": "User deleted"}
 
 @user_router.post("/{id}/reset-password")
-def reset_user_password(id: int, request: Request, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def reset_user_password(id: int, request: Request, current_user: models.User = Depends(require_permission("user_roles", "update")), db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.id == id, models.User.company_id == current_user.company_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1649,7 +1649,7 @@ from models.all_models import Announcement, AnnouncementRecipient
 from datetime import datetime
 
 @company_announcement_router.get('/notifications', response_model=list[schemas.NotificationResponse])
-def get_company_notifications(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def get_company_notifications(db: Session = Depends(get_db), current_user: models.User = Depends(require_permission("notifications", "view"))):
     recipients = db.query(AnnouncementRecipient).filter(
         AnnouncementRecipient.user_id == current_user.id
     ).order_by(AnnouncementRecipient.id.desc()).all()
@@ -1668,7 +1668,7 @@ def get_company_notifications(db: Session = Depends(get_db), current_user: model
     return results
 
 @company_announcement_router.patch('/notifications/{id}/read')
-def mark_notification_read(id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def mark_notification_read(id: int, db: Session = Depends(get_db), current_user: models.User = Depends(require_permission("notifications", "update"))):
     rec = db.query(AnnouncementRecipient).filter(
         AnnouncementRecipient.id == id,
         AnnouncementRecipient.user_id == current_user.id
@@ -1683,7 +1683,7 @@ def mark_notification_read(id: int, db: Session = Depends(get_db), current_user:
     return {'success': True}
 
 @company_announcement_router.get('/announcements', response_model=list[schemas.AnnouncementResponse])
-def get_company_announcements(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def get_company_announcements(db: Session = Depends(get_db), current_user: models.User = Depends(require_permission("notifications", "view"))):
     recipients = db.query(AnnouncementRecipient).filter(
         AnnouncementRecipient.user_id == current_user.id
     ).all()
@@ -1693,7 +1693,7 @@ def get_company_announcements(db: Session = Depends(get_db), current_user: model
     return anns
 
 @dashboard_router.get("/stats")
-def get_dashboard_stats(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_dashboard_stats(current_user: models.User = Depends(require_permission("dashboard", "view")), db: Session = Depends(get_db)):
     vehicles = db.query(models.Vehicle).filter(models.Vehicle.company_id == current_user.company_id).count()
     drivers = db.query(models.Driver).filter(models.Driver.company_id == current_user.company_id).count()
     trips = db.query(models.Trip).filter(models.Trip.company_id == current_user.company_id).count()
@@ -1745,7 +1745,7 @@ def get_dashboard_stats(current_user: models.User = Depends(get_current_user), d
 
 # --- SUPPORT TICKETS (COMPANY) ---
 @support_router.post("/tickets", response_model=schemas.SupportTicketResponse)
-def create_ticket(ticket: schemas.SupportTicketCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_ticket(ticket: schemas.SupportTicketCreate, current_user: models.User = Depends(require_permission("support_tickets", "create")), db: Session = Depends(get_db)):
     ticket_count = db.query(models.SupportTicket).count() + 1
     new_ticket = models.SupportTicket(
         ticket_id=f"TKT-{datetime.now().year}-{str(ticket_count).zfill(6)}",
@@ -1810,14 +1810,14 @@ def create_ticket(ticket: schemas.SupportTicketCreate, current_user: models.User
     return new_ticket
 
 @support_router.get("/tickets", response_model=list[schemas.SupportTicketResponse])
-def get_company_tickets(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_company_tickets(current_user: models.User = Depends(require_permission("support_tickets", "view")), db: Session = Depends(get_db)):
     tickets = db.query(models.SupportTicket).filter(models.SupportTicket.company_id == current_user.company_id).order_by(models.SupportTicket.id.desc()).all()
     for t in tickets:
         setattr(t, "messages", [])
     return tickets
 
 @support_router.get("/tickets/{id}", response_model=schemas.SupportTicketResponse)
-def get_ticket(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_ticket(id: int, current_user: models.User = Depends(require_permission("support_tickets", "view")), db: Session = Depends(get_db)):
     ticket = db.query(models.SupportTicket).filter(models.SupportTicket.id == id, models.SupportTicket.company_id == current_user.company_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
@@ -1831,7 +1831,7 @@ def get_ticket(id: int, current_user: models.User = Depends(get_current_user), d
     return ticket
 
 @support_router.post("/tickets/{id}/reply", response_model=schemas.TicketMessageResponse)
-def reply_ticket(id: int, reply: schemas.TicketMessageCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def reply_ticket(id: int, reply: schemas.TicketMessageCreate, current_user: models.User = Depends(require_permission("support_tickets", "create")), db: Session = Depends(get_db)):
     ticket = db.query(models.SupportTicket).filter(models.SupportTicket.id == id, models.SupportTicket.company_id == current_user.company_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
