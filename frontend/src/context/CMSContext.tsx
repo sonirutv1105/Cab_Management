@@ -366,30 +366,41 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // ═══════════════════════════════════════════════════════════
   const addVehicle = (vData: Omit<Vehicle, 'id'>) => {
     const newVh = { ...vData };
-    api.createVehicle(newVh).then(savedVehicle => {
+    return api.createVehicle(newVh).then(savedVehicle => {
       setVehicles((prev) => [...prev, savedVehicle]);
       appendAuditLog('Add Fleet Vehicle', 'Vehicle Management', `Registered brand new vehicle ${savedVehicle.make} ${savedVehicle.model} (${savedVehicle.plateNumber})`);
       if (savedVehicle.fuelType === 'Electric') {
         createNotification('Green fleet initiative incremented', `Electric vehicle logged: Base model ${savedVehicle.model} under plate ${savedVehicle.plateNumber} joins transit rosters.`, 'System', 'Info');
       }
-    }).catch(err => console.error("API Error", err));
+      return savedVehicle;
+    }).catch(err => {
+      console.error("API Error", err);
+      throw err;
+    });
   };
 
   const updateVehicle = (v: Vehicle) => {
-    api.updateVehicle(v.id, v).then(updatedVehicle => {
+    return api.updateVehicle(v.id, v).then(updatedVehicle => {
       setVehicles((prev) => prev.map((item) => (item.id === v.id ? updatedVehicle : item)));
       appendAuditLog('Update Vehicle Specifications', 'Vehicle Management', `Modified profile specifications or status for license plate ${updatedVehicle.plateNumber}`);
-    }).catch(err => console.error("API Error updating vehicle", err));
+      return updatedVehicle;
+    }).catch(err => {
+      console.error("API Error updating vehicle", err);
+      throw err;
+    });
   };
 
   const deleteVehicle = (id: string) => {
-    api.deleteVehicle(id).then(() => {
+    return api.deleteVehicle(id).then(() => {
       const v = vehicles.find((item) => item.id === id);
       setVehicles((prev) => prev.filter((item) => item.id !== id));
       if (v) {
         appendAuditLog('Retire Vehicle', 'Vehicle Management', `Removed transport vehicle ${v.model} (${v.plateNumber}) from enterprise active database`);
       }
-    }).catch(err => console.error("API Error", err));
+    }).catch(err => {
+      console.error("API Error", err);
+      throw err;
+    });
   };
 
   // ═══════════════════════════════════════════════════════════

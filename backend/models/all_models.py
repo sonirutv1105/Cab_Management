@@ -26,6 +26,7 @@ class Company(Base):
     gst_number = Column(String(100), nullable=True)
     pan_number = Column(String(100), nullable=True)
     registration_number = Column(String(100), nullable=True)
+    pincode = Column(String(20), nullable=True)
     head_name = Column(String(100), nullable=True)
     head_email = Column(String(100), nullable=True)
     head_phone = Column(String(50), nullable=True)
@@ -662,3 +663,108 @@ class TicketAttachment(Base):
     file_path = Column(String(500))
     file_type = Column(String(50))
     created_at = Column(String(50))
+
+# --- CORPORATE CONTRACT MODELS ---
+class StateRateCard(Base):
+    __tablename__ = "state_rate_cards"
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    state = Column(String(100), index=True)
+    vehicleCategory = Column(String(100)) # e.g. Sedan, SUV, Innova
+    fuelType = Column(String(50))
+    monthlyPackageRate = Column(Float, default=0.0)
+    perKmRate = Column(Float, default=0.0)
+    perHourRate = Column(Float, default=0.0)
+    airportRate = Column(Float, default=0.0)
+    localRate = Column(Float, default=0.0)
+    outstationRate = Column(Float, default=0.0)
+
+class CorporateContract(Base):
+    __tablename__ = "corporate_contracts"
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    contractNumber = Column(String(100), index=True)
+    contractName = Column(String(150))
+    company = Column(String(150))
+    branch = Column(String(100))
+    department = Column(String(100))
+    clientContactPerson = Column(String(100))
+    clientMobile = Column(String(50))
+    clientEmail = Column(String(100))
+    contractStatus = Column(String(50))
+    priority = Column(String(50))
+    description = Column(String(500))
+
+    startDate = Column(String(50))
+    endDate = Column(String(50))
+    renewalType = Column(String(100))
+    renewalReminder = Column(Integer)
+    isActive = Column(Boolean, default=True)
+
+    operatingState = Column(String(100))
+    operatingCity = Column(String(100))
+    officeLocation = Column(String(200))
+    serviceRadius = Column(Integer)
+
+    # Service Configuration
+    dedicatedVehicle = Column(Boolean, default=False)
+    employeePickupDrop = Column(Boolean, default=False)
+    airportTransfer = Column(Boolean, default=False)
+    localDuty = Column(Boolean, default=False)
+    outstation = Column(Boolean, default=False)
+    onDemandBooking = Column(Boolean, default=False)
+    vipService = Column(Boolean, default=False)
+    support24x7 = Column(Boolean, default=False)
+
+    # Driver Configuration
+    companyProvidesDriver = Column(Boolean, default=True)
+    dedicatedDriver = Column(Boolean, default=False)
+    backupDriver = Column(Boolean, default=False)
+    driverRotation = Column(String(50))
+    driverShiftTiming = Column(String(50))
+    driverUniformRequired = Column(Boolean, default=False)
+
+    # Billing Configuration
+    billingCycle = Column(String(50))
+    invoiceGenerationDate = Column(Integer)
+    creditDays = Column(Integer)
+    gst = Column(Float)
+    tds = Column(Float)
+    penaltyRules = Column(String(500))
+    latePaymentRules = Column(String(500))
+
+    # Terms & Approvals
+    contractClauses = Column(String(1000))
+    cancellationPolicy = Column(String(500))
+    penaltyClause = Column(String(500))
+    renewalClause = Column(String(500))
+    notes = Column(String(1000))
+
+    createdBy = Column(String(100))
+    reviewedBy = Column(String(100))
+    approvedBy = Column(String(100))
+    approvalDate = Column(String(50))
+    createdAt = Column(String(50))
+
+    # Relationship
+    vehicles = relationship("CorporateContractVehicle", back_populates="contract", cascade="all, delete-orphan")
+
+class CorporateContractVehicle(Base):
+    __tablename__ = "corporate_contract_vehicles"
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    contract_id = Column(Integer, ForeignKey("corporate_contracts.id", ondelete="CASCADE"))
+    vehicleType = Column(String(100))
+    vehicleCategory = Column(String(100))
+    fuelType = Column(String(50))
+    transmission = Column(String(50))
+    quantity = Column(Integer)
+    monthlyKmIncluded = Column(Integer)
+    dailyLimit = Column(Integer)
+    extraKmCharge = Column(Float)
+    minimumBillingHours = Column(Integer)
+    nightCharges = Column(Float)
+    driverAllowance = Column(Float)
+    waitingCharges = Column(Float)
+    parking = Column(String(50))
+    toll = Column(String(50))
+    remarks = Column(String(500))
+    
+    contract = relationship("CorporateContract", back_populates="vehicles")

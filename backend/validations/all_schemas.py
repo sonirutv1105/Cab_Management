@@ -1088,3 +1088,120 @@ class SupportTicketResponse(SupportTicketBase):
 class SupportTicketUpdate(BaseModel):
     status: Optional[str] = None
     priority: Optional[str] = None
+
+# --- CORPORATE CONTRACT SCHEMAS ---
+
+class StateRateCardBase(BaseModel):
+    state: str
+    vehicleCategory: str
+    fuelType: Optional[str] = None
+    monthlyPackageRate: float = 0.0
+    perKmRate: float = 0.0
+    perHourRate: float = 0.0
+    airportRate: float = 0.0
+    localRate: float = 0.0
+    outstationRate: float = 0.0
+
+class StateRateCardCreate(StateRateCardBase):
+    pass
+
+class StateRateCardResponse(StateRateCardBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class CorporateContractVehicleBase(BaseModel):
+    vehicleType: Optional[str] = None
+    vehicleCategory: Optional[str] = None
+    fuelType: Optional[str] = None
+    transmission: Optional[str] = None
+    quantity: Optional[int] = 0
+    monthlyKmIncluded: Optional[int] = 0
+    dailyLimit: Optional[int] = 0
+    extraKmCharge: Optional[float] = 0.0
+    minimumBillingHours: Optional[int] = 0
+    nightCharges: Optional[float] = 0.0
+    driverAllowance: Optional[float] = 0.0
+    waitingCharges: Optional[float] = 0.0
+    parking: Optional[str] = None
+    toll: Optional[str] = None
+    remarks: Optional[str] = None
+
+class CorporateContractVehicleCreate(CorporateContractVehicleBase):
+    pass
+
+class CorporateContractVehicleResponse(CorporateContractVehicleBase):
+    id: int
+    contract_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class CorporateContractBase(BaseModel):
+    contractNumber: Optional[str] = None
+    contractName: Optional[str] = None
+    company: Optional[str] = None
+    branch: Optional[str] = None
+    department: Optional[str] = None
+    clientContactPerson: Optional[str] = None
+    clientMobile: Optional[str] = None
+    clientEmail: Optional[str] = None
+    contractStatus: Optional[str] = None
+    priority: Optional[str] = None
+    description: Optional[str] = None
+
+    startDate: Optional[str] = None
+    endDate: Optional[str] = None
+    renewalType: Optional[str] = None
+    renewalReminder: Optional[int] = 0
+    isActive: bool = True
+
+    operatingState: Optional[str] = None
+    operatingCity: Optional[str] = None
+    officeLocation: Optional[str] = None
+    serviceRadius: Optional[int] = 0
+
+    dedicatedVehicle: bool = False
+    employeePickupDrop: bool = False
+    airportTransfer: bool = False
+    localDuty: bool = False
+    outstation: bool = False
+    onDemandBooking: bool = False
+    vipService: bool = False
+    support24x7: bool = False
+
+    companyProvidesDriver: bool = True
+    dedicatedDriver: bool = False
+    backupDriver: bool = False
+    driverRotation: Optional[str] = None
+    driverShiftTiming: Optional[str] = None
+    driverUniformRequired: bool = False
+
+    billingCycle: Optional[str] = None
+    invoiceGenerationDate: Optional[int] = 0
+    creditDays: Optional[int] = 0
+    gst: Optional[float] = 0.0
+    tds: Optional[float] = 0.0
+    penaltyRules: Optional[str] = None
+    latePaymentRules: Optional[str] = None
+
+    contractClauses: Optional[str] = None
+    cancellationPolicy: Optional[str] = None
+    penaltyClause: Optional[str] = None
+    renewalClause: Optional[str] = None
+    notes: Optional[str] = None
+
+    createdBy: Optional[str] = None
+    reviewedBy: Optional[str] = None
+    approvedBy: Optional[str] = None
+    approvalDate: Optional[str] = None
+    createdAt: Optional[str] = None
+
+class CorporateContractCreate(CorporateContractBase):
+    vehicles: List[CorporateContractVehicleCreate] = []
+
+class CorporateContractResponse(CorporateContractBase):
+    id: int
+    vehicles: List[CorporateContractVehicleResponse] = []
+    model_config = ConfigDict(from_attributes=True)
+
+class CorporateContractUpdate(BaseModel):
+    # For now, simplistic update if needed
+    pass

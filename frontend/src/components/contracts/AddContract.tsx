@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import ContractTypeSelection, { ContractMainType } from './ContractTypeSelection';
-import CorporateTypeSelection from './CorporateTypeSelection';
 import GovernmentContractForm from './GovernmentContractForm';
 import CorporateContractForm from './CorporateContractForm';
+import { ArrowLeft } from 'lucide-react';
 
 export type AddContractStep = 
   | 'select_main' 
-  | 'select_corporate' 
   | 'form_gov' 
-  | 'form_corp';
+  | 'placeholder_corp';
 
 interface AddContractProps {
   onClose: () => void;
@@ -20,19 +19,13 @@ export default function AddContract({ onClose, onSuccess, resumeId }: AddContrac
   // If a resumeId exists (e.g. from a draft), we default to GovernmentContractForm for now,
   // as the old drafts were based on the single monolithic form.
   const [step, setStep] = useState<AddContractStep>(resumeId ? 'form_gov' : 'select_main');
-  const [includeOnCall, setIncludeOnCall] = useState<boolean>(false);
 
   const handleMainTypeNext = (type: ContractMainType) => {
     if (type === 'Government') {
       setStep('form_gov');
     } else if (type === 'Corporate') {
-      setStep('select_corporate');
+      setStep('placeholder_corp');
     }
-  };
-
-  const handleCorporateTypeNext = (onCall: boolean) => {
-    setIncludeOnCall(onCall);
-    setStep('form_corp');
   };
 
   switch (step) {
@@ -41,14 +34,6 @@ export default function AddContract({ onClose, onSuccess, resumeId }: AddContrac
         <ContractTypeSelection 
           onNext={handleMainTypeNext} 
           onCancel={onClose} 
-        />
-      );
-    
-    case 'select_corporate':
-      return (
-        <CorporateTypeSelection 
-          onNext={handleCorporateTypeNext} 
-          onBack={() => setStep('select_main')} 
         />
       );
     
@@ -61,12 +46,11 @@ export default function AddContract({ onClose, onSuccess, resumeId }: AddContrac
         />
       );
 
-    case 'form_corp':
+    case 'placeholder_corp':
       return (
         <CorporateContractForm 
-          onBack={() => setStep('select_corporate')} 
+          onBack={() => setStep('select_main')} 
           onSuccess={onSuccess} 
-          includeOnCall={includeOnCall}
         />
       );
 

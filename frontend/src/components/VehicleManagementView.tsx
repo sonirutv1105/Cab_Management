@@ -66,6 +66,14 @@ export default function VehicleManagementView() {
   // Modals
   const [modalOpen, setModalOpen] = useState(false);
   const [editingVh, setEditingVh] = useState<Vehicle | null>(null);
+  
+  // New Modal States
+  const [viewVehicle, setViewVehicle] = useState<Vehicle | null>(null);
+  const [docVehicle, setDocVehicle] = useState<Vehicle | null>(null);
+  const [assignVehicle, setAssignVehicle] = useState<Vehicle | null>(null);
+  const [statusVehicle, setStatusVehicle] = useState<Vehicle | null>(null);
+  const [driverSelect, setDriverSelect] = useState<string>('');
+  const [statusSelect, setStatusSelect] = useState<Vehicle['status']>('Available');
 
   // Form
   const [formState, setFormState] = useState<Omit<Vehicle, 'id'>>({
@@ -679,26 +687,34 @@ export default function VehicleManagementView() {
                     {/* Actions */}
                     <td className="px-3 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <button className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:bg-blue-900/30 rounded-lg transition-colors" title="View Details">
+                        <button onClick={() => setViewVehicle(v)} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:bg-blue-900/30 rounded-lg transition-colors" title="View Details">
                           <Eye className="w-4 h-4" />
                         </button>
                         <button onClick={() => openEdit(v)} disabled={isReadOnly}
                           className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:bg-blue-900/30 rounded-lg transition-colors disabled:opacity-30" title="Edit">
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:bg-blue-900/30 rounded-lg transition-colors" title="Documents">
+                        <button onClick={() => setDocVehicle(v)} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:bg-blue-900/30 rounded-lg transition-colors" title="Documents">
                           <FileText className="w-4 h-4" />
                         </button>
-                        <button className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:bg-blue-900/30 rounded-lg transition-colors" title="Assign Key">
+                        <button onClick={() => { setDriverSelect(v.assignedDriverId?.toString() || ''); setAssignVehicle(v); }} disabled={isReadOnly} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:bg-blue-900/30 rounded-lg transition-colors disabled:opacity-30" title="Assign Key">
                           <Key className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => { if (confirm(`Delete vehicle ${v.plateNumber}?`)) deleteVehicle(v.id); }}
+                          onClick={async () => {
+                            if (confirm(`Delete vehicle ${v.plateNumber}?`)) {
+                              try {
+                                await deleteVehicle(v.id);
+                              } catch (e: any) {
+                                alert(e.response?.data?.detail || e.message || 'Failed to delete vehicle');
+                              }
+                            }
+                          }}
                           disabled={isReadOnly}
                           className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-600 hover:bg-red-50 dark:bg-red-900/30 rounded-lg transition-colors disabled:opacity-30" title="Delete">
                           <Trash2 className="w-4 h-4" />
                         </button>
-                        <button className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="More">
+                        <button onClick={() => { setStatusSelect(v.status); setStatusVehicle(v); }} disabled={isReadOnly} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-30" title="More">
                           <MoreHorizontal className="w-4 h-4" />
                         </button>
                       </div>
@@ -888,6 +904,135 @@ export default function VehicleManagementView() {
           </div>
         </div>
       )}
+
+      {/* ═══════════════ VIEW MODAL ═══════════════ */}
+      {viewVehicle && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 max-w-lg w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Vehicle Details</h3>
+              <button onClick={() => setViewVehicle(null)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div><span className="text-gray-500 block text-xs font-bold">Plate Number</span>{viewVehicle.plateNumber}</div>
+              <div><span className="text-gray-500 block text-xs font-bold">Make & Model</span>{viewVehicle.make} {viewVehicle.model}</div>
+              <div><span className="text-gray-500 block text-xs font-bold">Type</span>{viewVehicle.vehicleType}</div>
+              <div><span className="text-gray-500 block text-xs font-bold">Fuel Type</span>{viewVehicle.fuelType}</div>
+              <div><span className="text-gray-500 block text-xs font-bold">Year</span>{viewVehicle.year}</div>
+              <div><span className="text-gray-500 block text-xs font-bold">Color</span>{viewVehicle.color}</div>
+              <div><span className="text-gray-500 block text-xs font-bold">Status</span>{viewVehicle.status}</div>
+              <div><span className="text-gray-500 block text-xs font-bold">Insurance Expiry</span>{formatInsuranceDate(viewVehicle.insuranceExpiry)}</div>
+              <div><span className="text-gray-500 block text-xs font-bold">Contract</span>{viewVehicle.contract || '-'}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════ DOCUMENTS MODAL ═══════════════ */}
+      {docVehicle && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 max-w-lg w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Documents: {docVehicle.plateNumber}</h3>
+              <button onClick={() => setDocVehicle(null)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {complianceDocs.filter(d => d.entityType === 'Vehicle' && d.entityId === docVehicle.id).length > 0 ? (
+                complianceDocs.filter(d => d.entityType === 'Vehicle' && d.entityId === docVehicle.id).map(doc => (
+                  <div key={doc.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <div>
+                      <div className="font-semibold text-sm">{doc.documentName}</div>
+                      <div className="text-xs text-gray-500">Exp: {doc.expiryDate}</div>
+                    </div>
+                    <span className={`px-2 py-1 text-xs font-bold rounded-md ${doc.status === 'Valid' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                      {doc.status}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-gray-500 text-center py-4">No documents found for this vehicle.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════ ASSIGN DRIVER MODAL ═══════════════ */}
+      {assignVehicle && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 max-w-sm w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Assign Driver</h3>
+              <button onClick={() => setAssignVehicle(null)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">Select Driver</label>
+                <select value={driverSelect} onChange={(e) => setDriverSelect(e.target.value)}
+                  className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg p-2.5 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:border-blue-500">
+                  <option value="">-- Unassigned --</option>
+                  {drivers.filter(d => d.status === 'Active' || String(d.id) === assignVehicle.assignedDriverId?.toString()).map(d => (
+                    <option key={d.id} value={d.id}>{d.name} ({d.phone})</option>
+                  ))}
+                </select>
+              </div>
+              <button onClick={async () => {
+                try {
+                  await updateVehicle({ ...assignVehicle, assignedDriverId: driverSelect ? parseInt(driverSelect) : undefined });
+                  setAssignVehicle(null);
+                } catch (e: any) {
+                  alert(e.response?.data?.detail || e.message || "Failed to assign driver");
+                }
+              }} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors">
+                Save Assignment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════ STATUS MODAL ═══════════════ */}
+      {statusVehicle && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 max-w-sm w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Change Status</h3>
+              <button onClick={() => setStatusVehicle(null)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">Vehicle Status</label>
+                <select value={statusSelect} onChange={(e) => setStatusSelect(e.target.value as any)}
+                  className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg p-2.5 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:border-blue-500">
+                  <option value="Available">Available</option>
+                  <option value="On Trip">On Trip</option>
+                  <option value="Under Maintenance">Under Maintenance</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+              <button onClick={async () => {
+                try {
+                  await updateVehicle({ ...statusVehicle, status: statusSelect });
+                  setStatusVehicle(null);
+                } catch (e: any) {
+                  alert(e.response?.data?.detail || e.message || "Failed to update status");
+                }
+              }} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors">
+                Update Status
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

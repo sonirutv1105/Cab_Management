@@ -96,6 +96,7 @@ async def favicon():
     return Response(content=b"", media_type="image/x-icon")
 
 from routes.all_routes import contract_buyer_router, contract_client_router, contract_financial_router, contract_consignee_router, contract_vehicle_req_router, contract_sla_router, contract_renewal_router
+from routes.corporate_contract import corporate_contract_router, rate_card_router
 
 app.include_router(contract_buyer_router)
 app.include_router(contract_client_router)
@@ -104,3 +105,5 @@ app.include_router(contract_consignee_router)
 app.include_router(contract_vehicle_req_router)
 app.include_router(contract_sla_router)
 app.include_router(contract_renewal_router)
+app.include_router(corporate_contract_router)
+app.include_router(rate_card_router)

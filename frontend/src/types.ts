@@ -420,3 +420,102 @@ export interface ContractDraft {
   createdAt: string;
   updatedAt: string;
 }
+
+
+// Corporate Contract Types
+export interface StateRateCard {
+  id: number;
+  state: string;
+  vehicleCategory: string;
+  fuelType?: string;
+  monthlyPackageRate: number;
+  perKmRate: number;
+  perHourRate: number;
+  airportRate: number;
+  localRate: number;
+  outstationRate: number;
+}
+
+export interface CorporateContractVehicle {
+  id?: number;
+  contract_id?: number;
+  vehicleType?: string;
+  vehicleCategory?: string;
+  fuelType?: string;
+  transmission?: string;
+  quantity: number;
+  monthlyKmIncluded: number;
+  dailyLimit: number;
+  extraKmCharge: number;
+  minimumBillingHours: number;
+  nightCharges: number;
+  driverAllowance: number;
+  waitingCharges: number;
+  parking?: string;
+  toll?: string;
+  remarks?: string;
+}
+
+export interface CorporateContract {
+  id?: number;
+  contractNumber?: string;
+  contractName?: string;
+  company?: string;
+  branch?: string;
+  department?: string;
+  clientContactPerson?: string;
+  clientMobile?: string;
+  clientEmail?: string;
+  contractStatus?: string;
+  priority?: string;
+  description?: string;
+
+  startDate?: string;
+  endDate?: string;
+  renewalType?: string;
+  renewalReminder: number;
+  isActive: boolean;
+
+  operatingState?: string;
+  operatingCity?: string;
+  officeLocation?: string;
+  serviceRadius: number;
+
+  dedicatedVehicle: boolean;
+  employeePickupDrop: boolean;
+  airportTransfer: boolean;
+  localDuty: boolean;
+  outstation: boolean;
+  onDemandBooking: boolean;
+  vipService: boolean;
+  support24x7: boolean;
+
+  companyProvidesDriver: boolean;
+  dedicatedDriver: boolean;
+  backupDriver: boolean;
+  driverRotation?: string;
+  driverShiftTiming?: string;
+  driverUniformRequired: boolean;
+
+  billingCycle?: string;
+  invoiceGenerationDate: number;
+  creditDays: number;
+  gst: number;
+  tds: number;
+  penaltyRules?: string;
+  latePaymentRules?: string;
+
+  contractClauses?: string;
+  cancellationPolicy?: string;
+  penaltyClause?: string;
+  renewalClause?: string;
+  notes?: string;
+
+  createdBy?: string;
+  reviewedBy?: string;
+  approvedBy?: string;
+  approvalDate?: string;
+  createdAt?: string;
+
+  vehicles: CorporateContractVehicle[];
+}

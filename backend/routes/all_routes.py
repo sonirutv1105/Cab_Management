@@ -277,7 +277,7 @@ def create_vehicle(vehicle: schemas.VehicleCreate, current_user: models.User = D
     return db_item
 
 @vehicle_router.delete("/{id}")
-def delete_vehicle(id: int, current_user: models.User = Depends(require_permission("vehicle_management", "view")), db: Session = Depends(get_db)):
+def delete_vehicle(id: int, current_user: models.User = Depends(require_permission("vehicle_management", "delete")), db: Session = Depends(get_db)):
     db_item = db.query(models.Vehicle).filter(models.Vehicle.id == id, models.Vehicle.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
     db.delete(db_item)

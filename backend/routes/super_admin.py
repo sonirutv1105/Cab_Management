@@ -47,17 +47,37 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+import re
+from pydantic import BaseModel, model_validator
+
 class CompanyCreate(BaseModel):
     name: str
     company_type: str
     industry: str = None
     gst_number: str = None
+    pan_number: str = None
     registration_number: str = None
+    pincode: str = None
     head_name: str = None
     head_email: str = None
     head_phone: str = None
     plan: str = "Basic"
     billing_cycle: str = "Monthly"
+
+    @model_validator(mode='after')
+    def validate_fields(self):
+        if self.gst_number and not re.match(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$", self.gst_number):
+            raise ValueError('Invalid GST format (e.g., 22AAAAA0000A1Z5)')
+        if self.pan_number and not re.match(r"^[A-Z]{5}[0-9]{4}[A-Z]{1}$", self.pan_number):
+            raise ValueError('Invalid PAN format (e.g., ABCDE1234F)')
+        if self.head_phone:
+            if len(self.head_phone) != 10 or not re.match(r"^[6-9][0-9]{9}$", self.head_phone):
+                raise ValueError('Invalid mobile number. Must be 10 digits and start with 6-9')
+        if self.pincode and not re.match(r"^[0-9]{6}$", self.pincode):
+            raise ValueError('Pincode must be exactly 6 digits')
+        if self.head_email and not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", self.head_email):
+            raise ValueError('Invalid email format')
+        return self
 
 import json
 from datetime import datetime
@@ -147,7 +167,9 @@ def create_company(company: CompanyCreate, current_admin: SuperAdmin = Depends(g
         company_type=company.company_type,
         industry=company.industry,
         gst_number=company.gst_number,
+        pan_number=company.pan_number,
         registration_number=company.registration_number,
+        pincode=company.pincode,
         head_name=company.head_name,
         head_email=company.head_email,
         head_phone=company.head_phone,
@@ -605,39 +627,72 @@ def format_inr(number):
 
 @super_admin_router.get("/dashboard-stats")
 def get_dashboard_stats(current_admin: SuperAdmin = Depends(get_current_admin), db: Session = Depends(get_db)):
-    total_companies = db.query(Company).count()
-    active_companies = db.query(Company).filter(Company.status == "Active").count()
-    trial_companies = db.query(Company).filter(Company.status == "Trial").count()
-    suspended_companies = db.query(Company).filter(Company.status == "Suspended").count()
-    deactivated_companies = db.query(Company).filter(Company.status.in_(["Inactive", "Deactivated"])).count()
+    import datetime
+    from collections import defaultdict
+    
+    today = datetime.datetime.today()
+    current_month_str = today.strftime("%Y-%m")
+    
+    def get_trend(current, total):
+        if total == 0: return "0%"
+        perc = (current / total) * 100
+        return f"+{int(perc)}%"
+
+    companies = db.query(Company).all()
+    total_companies = len(companies)
+    active_companies = len([c for c in companies if c.status == "Active"])
+    trial_companies = len([c for c in companies if c.status == "Trial"])
+    suspended_companies = len([c for c in companies if c.status == "Suspended"])
+    deactivated_companies = len([c for c in companies if c.status in ["Inactive", "Deactivated"]])
+    
+    new_companies_this_month = len([c for c in companies if c.created_at and c.created_at.startswith(current_month_str)])
     
     subs = db.query(Subscription).all()
     revenue = sum([299 if s.plan_name == "Premium" else 99 if s.plan_name == "Standard" else 0 for s in subs])
     
+    monthly_rev = defaultdict(int)
+    for s in subs:
+        if s.start_date:
+            try:
+                dt = datetime.datetime.strptime(s.start_date, "%Y-%m-%d")
+                month_name = dt.strftime("%b")
+                amt = 299 if s.plan_name == "Premium" else 99 if s.plan_name == "Standard" else 0
+                monthly_rev[month_name] += amt
+            except ValueError:
+                pass
+    
+    revenue_data = []
+    for i in range(5, -1, -1):
+        month_idx = (today.month - i - 1) % 12 + 1
+        month_name = datetime.date(2000, month_idx, 1).strftime('%b')
+        revenue_data.append({"name": month_name, "revenue": monthly_rev.get(month_name, 0)})
+        
+    this_month_rev = revenue_data[-1]["revenue"]
+    last_month_rev = revenue_data[-2]["revenue"] if len(revenue_data) > 1 else 0
+    if last_month_rev == 0:
+        rev_trend = "+100%" if this_month_rev > 0 else "0%"
+        rev_up = True
+    else:
+        diff = ((this_month_rev - last_month_rev) / last_month_rev) * 100
+        rev_trend = f"{'+' if diff >= 0 else ''}{int(diff)}%"
+        rev_up = diff >= 0
+
+    pending_renewals = len([s for s in subs if s.status == "Expiring"])
+    
     subscriptions_status = [
         {"name": "Active", "value": len([s for s in subs if s.status == "Active"])},
-        {"name": "Expiring Soon", "value": len([s for s in subs if s.status == "Expiring"])},
+        {"name": "Expiring Soon", "value": pending_renewals},
         {"name": "Expired", "value": len([s for s in subs if s.status == "Expired"])}
-    ]
-    
-    revenue_data = [
-        {"name": "Jan", "revenue": 12000},
-        {"name": "Feb", "revenue": 15000},
-        {"name": "Mar", "revenue": 18000},
-        {"name": "Apr", "revenue": 22000},
-        {"name": "May", "revenue": 25000},
-        {"name": "Jun", "revenue": 29000},
-        {"name": "Jul", "revenue": revenue}
     ]
     
     return {
         "kpis": [
-            { "label": "Total Companies", "value": str(total_companies), "trend": "+5%", "isUp": True },
-            { "label": "Active Companies", "value": str(active_companies), "trend": "+2%", "isUp": True },
-            { "label": "Trial Companies", "value": str(trial_companies), "trend": "-1%", "isUp": False },
+            { "label": "Total Companies", "value": str(total_companies), "trend": get_trend(new_companies_this_month, total_companies), "isUp": True },
+            { "label": "Active Companies", "value": str(active_companies), "trend": get_trend(active_companies, total_companies), "isUp": True },
+            { "label": "Trial Companies", "value": str(trial_companies), "trend": get_trend(trial_companies, total_companies), "isUp": True },
             { "label": "Suspended", "value": str(suspended_companies), "trend": "0%", "isUp": False },
-            { "label": "Monthly Revenue", "value": f"₹{format_inr(revenue)}", "trend": "+12%", "isUp": True },
-            { "label": "Pending Renewals", "value": "0", "trend": "0%", "isUp": True },
+            { "label": "Monthly Revenue", "value": f"₹{format_inr(revenue)}", "trend": rev_trend, "isUp": rev_up },
+            { "label": "Pending Renewals", "value": str(pending_renewals), "trend": "0%", "isUp": True },
             { "label": "Deactivated Companies", "value": str(deactivated_companies), "trend": "0%", "isUp": False }
         ],
         "subscriptions_status": subscriptions_status,

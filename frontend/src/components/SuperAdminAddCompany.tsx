@@ -10,7 +10,6 @@ import {
   CheckCircle2, 
   ChevronRight,
   Info,
-  Save,
   Check,
   X,
   Copy,
@@ -29,7 +28,7 @@ const STEPS = [
   { id: 'review', title: 'Review & Create', icon: ClipboardCheck, desc: 'Verify all details before creation.' }
 ];
 
-type StepStatus = 'not-started' | 'in-progress' | 'completed' | 'draft';
+type StepStatus = 'not-started' | 'in-progress' | 'completed';
 
 export default function SuperAdminAddCompany({ onBack }: { onBack?: () => void }) {
   const [currentStep, setCurrentStep] = useState(0);
@@ -47,6 +46,7 @@ export default function SuperAdminAddCompany({ onBack }: { onBack?: () => void }
     company_type: 'Private',
     industry: '',
     gst_number: '',
+    pan_number: '',
     registration_number: '',
     head_name: '',
     head_email: '',
@@ -77,9 +77,51 @@ export default function SuperAdminAddCompany({ onBack }: { onBack?: () => void }
     email_notifications: true
   });
 
-  const [showToast, setShowToast] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [generatedData, setGeneratedData] = useState<any>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const formatGST = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15);
+  const formatPAN = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+  const formatMobile = (value: string) => value.replace(/[^0-9]/g, '').slice(0, 10);
+  const formatPincode = (value: string) => value.replace(/[^0-9]/g, '').slice(0, 6);
+
+  const validateField = (field: string, value: string) => {
+    let error = '';
+    switch (field) {
+      case 'gst_number':
+        if (value && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(value)) {
+          error = 'Invalid GST format (e.g., 22AAAAA0000A1Z5)';
+        }
+        break;
+      case 'pan_number':
+        if (value && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(value)) {
+          error = 'Invalid PAN format (e.g., ABCDE1234F)';
+        }
+        break;
+      case 'head_phone':
+        if (value) {
+          if (value.length < 10) {
+            error = 'Mobile number must be 10 digits';
+          } else if (!/^[6-9][0-9]{9}$/.test(value)) {
+            error = 'Invalid mobile number. Must start with 6-9';
+          }
+        }
+        break;
+      case 'pincode':
+        if (value && !/^[0-9]{6}$/.test(value)) {
+          error = 'Pincode must be exactly 6 digits';
+        }
+        break;
+      case 'head_email':
+        if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          error = 'Invalid email format';
+        }
+        break;
+    }
+    setErrors(prev => ({ ...prev, [field]: error }));
+    return error === '';
+  };
 
   const handleNext = () => {
     setStatuses(prev => ({
@@ -94,13 +136,21 @@ export default function SuperAdminAddCompany({ onBack }: { onBack?: () => void }
     if (currentStep > 0) setCurrentStep(c => c - 1);
   };
 
-  const handleSaveDraft = () => {
-    setStatuses(prev => ({ ...prev, [STEPS[currentStep].id]: 'draft' }));
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
-  };
-
   const handleCreate = async () => {
+    // Validate all fields before submission
+    let isValid = true;
+    isValid = validateField('gst_number', formData.gst_number) && isValid;
+    isValid = validateField('pan_number', formData.pan_number) && isValid;
+    isValid = validateField('head_phone', formData.head_phone) && isValid;
+    isValid = validateField('pincode', formData.pincode) && isValid;
+    isValid = validateField('head_email', formData.head_email) && isValid;
+    
+    // Also check if any errors exist in the state
+    if (!isValid || Object.values(errors).some(err => err !== '')) {
+      alert("Please fix the validation errors before creating the company.");
+      return;
+    }
+
     try {
       const token = localStorage.getItem('super_admin_auth');
       const res = await fetch(`${API_URL}/super-admin/companies`, {
@@ -137,7 +187,6 @@ export default function SuperAdminAddCompany({ onBack }: { onBack?: () => void }
     switch(status) {
       case 'completed': return <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-1"><CheckCircle2 className="w-3.5 h-3.5 text-gray-400" /> Completed</span>;
       case 'in-progress': return <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold text-amber-700 bg-amber-100 rounded-md uppercase tracking-wider mt-1.5"><div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div> Pending</span>;
-      case 'draft': return <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold text-purple-700 bg-purple-100 rounded-md uppercase tracking-wider mt-1.5"><div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div> Draft</span>;
       default: return <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1"><div className="w-3 h-3 rounded-full border-2 border-gray-300"></div> Not Started</span>;
     }
   };
@@ -242,7 +291,13 @@ export default function SuperAdminAddCompany({ onBack }: { onBack?: () => void }
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">GST Number</label>
-                    <input type="text" value={formData.gst_number} onChange={e => setFormData({...formData, gst_number: e.target.value})} placeholder="Enter GST number" className="w-full px-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all shadow-sm" />
+                    <input type="text" value={formData.gst_number} onChange={e => { const val = formatGST(e.target.value); setFormData({...formData, gst_number: val}); validateField('gst_number', val); }} placeholder="Enter GST number" className={`w-full px-4 py-3 bg-white dark:bg-gray-900 border ${errors.gst_number ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : 'border-gray-200 dark:border-gray-700 focus:ring-blue-500/20 focus:border-blue-500'} rounded-lg text-sm focus:outline-none focus:ring-2 dark:text-white transition-all shadow-sm`} />
+                    {errors.gst_number && <p className="text-red-500 text-xs mt-1">{errors.gst_number}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">PAN Number</label>
+                    <input type="text" value={formData.pan_number} onChange={e => { const val = formatPAN(e.target.value); setFormData({...formData, pan_number: val}); validateField('pan_number', val); }} placeholder="Enter PAN number" className={`w-full px-4 py-3 bg-white dark:bg-gray-900 border ${errors.pan_number ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : 'border-gray-200 dark:border-gray-700 focus:ring-blue-500/20 focus:border-blue-500'} rounded-lg text-sm focus:outline-none focus:ring-2 dark:text-white transition-all shadow-sm`} />
+                    {errors.pan_number && <p className="text-red-500 text-xs mt-1">{errors.pan_number}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Registration Number</label>
@@ -267,7 +322,8 @@ export default function SuperAdminAddCompany({ onBack }: { onBack?: () => void }
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Email Address <span className="text-red-500">*</span></label>
-                      <input type="email" value={formData.head_email} onChange={e => setFormData({...formData, head_email: e.target.value})} placeholder="admin@company.com" className="w-full px-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all shadow-sm" />
+                      <input type="email" value={formData.head_email} onChange={e => { const val = e.target.value.trim(); setFormData({...formData, head_email: val}); validateField('head_email', val); }} placeholder="admin@company.com" className={`w-full px-4 py-3 bg-white dark:bg-gray-900 border ${errors.head_email ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : 'border-gray-200 dark:border-gray-700 focus:ring-blue-500/20 focus:border-blue-500'} rounded-lg text-sm focus:outline-none focus:ring-2 dark:text-white transition-all shadow-sm`} />
+                      {errors.head_email && <p className="text-red-500 text-xs mt-1">{errors.head_email}</p>}
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Designation</label>
@@ -275,7 +331,8 @@ export default function SuperAdminAddCompany({ onBack }: { onBack?: () => void }
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Mobile Number <span className="text-red-500">*</span></label>
-                      <input type="tel" value={formData.head_phone} onChange={e => setFormData({...formData, head_phone: e.target.value})} placeholder="+1 (555) 000-0000" className="w-full px-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all shadow-sm" />
+                      <input type="tel" value={formData.head_phone} onChange={e => { const val = formatMobile(e.target.value); setFormData({...formData, head_phone: val}); validateField('head_phone', val); }} placeholder="e.g. 9876543210" className={`w-full px-4 py-3 bg-white dark:bg-gray-900 border ${errors.head_phone ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : 'border-gray-200 dark:border-gray-700 focus:ring-blue-500/20 focus:border-blue-500'} rounded-lg text-sm focus:outline-none focus:ring-2 dark:text-white transition-all shadow-sm`} />
+                      {errors.head_phone && <p className="text-red-500 text-xs mt-1">{errors.head_phone}</p>}
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Alternate Mobile</label>
@@ -315,7 +372,8 @@ export default function SuperAdminAddCompany({ onBack }: { onBack?: () => void }
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Pincode / Zip <span className="text-red-500">*</span></label>
-                    <input type="text" value={formData.pincode} onChange={e => setFormData({...formData, pincode: e.target.value})} placeholder="Postal Code" className="w-full px-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all shadow-sm" />
+                    <input type="text" value={formData.pincode} onChange={e => { const val = formatPincode(e.target.value); setFormData({...formData, pincode: val}); validateField('pincode', val); }} placeholder="Postal Code" className={`w-full px-4 py-3 bg-white dark:bg-gray-900 border ${errors.pincode ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : 'border-gray-200 dark:border-gray-700 focus:ring-blue-500/20 focus:border-blue-500'} rounded-lg text-sm focus:outline-none focus:ring-2 dark:text-white transition-all shadow-sm`} />
+                    {errors.pincode && <p className="text-red-500 text-xs mt-1">{errors.pincode}</p>}
                   </div>
                 </div>
               )}
@@ -465,6 +523,12 @@ export default function SuperAdminAddCompany({ onBack }: { onBack?: () => void }
                             <dd className="font-bold text-gray-900 dark:text-gray-100">{formData.gst_number}</dd>
                           </div>
                         )}
+                        {formData.pan_number && (
+                          <div className="flex justify-between pb-1">
+                            <dt className="text-gray-500 dark:text-gray-400 font-medium">PAN Number</dt>
+                            <dd className="font-bold text-gray-900 dark:text-gray-100">{formData.pan_number}</dd>
+                          </div>
+                        )}
                       </dl>
                     </div>
 
@@ -589,12 +653,6 @@ export default function SuperAdminAddCompany({ onBack }: { onBack?: () => void }
               <ArrowLeft className="w-4 h-4" /> Previous
             </button>
             <div className="flex gap-4">
-              <button
-                onClick={handleSaveDraft}
-                className="flex items-center gap-2 px-6 py-2.5 font-bold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-transparent hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-all text-sm"
-              >
-                <Save className="w-4 h-4" /> Save Draft
-              </button>
               {currentStep < STEPS.length - 1 ? (
                 <button
                   onClick={handleNext}
@@ -614,12 +672,6 @@ export default function SuperAdminAddCompany({ onBack }: { onBack?: () => void }
           </div>
 
         </div>
-      </div>
-
-      {/* TOAST NOTIFICATION */}
-      <div className={`fixed bottom-24 right-8 flex items-center gap-3 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-2xl transition-all duration-300 z-50 ${showToast ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
-        <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-        <span className="font-semibold text-sm">Draft saved successfully.</span>
       </div>
 
       {/* SUCCESS MODAL */}

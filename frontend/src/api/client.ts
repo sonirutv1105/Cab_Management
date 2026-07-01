@@ -262,6 +262,20 @@ export const api = {
   exportToExcel: async (payload: { title: string; headers: string[]; rows: any[][] }) => {
     const res = await apiClient.post('/export/excel', payload, { responseType: 'blob' });
     return res.data;
+  },
+
+  // Corporate Contracts
+  getRateCardsByState: async (state: string) => {
+    const res = await apiClient.get(`/rate-cards/${state}`);
+    return res.data;
+  },
+  getCorporateContracts: async () => {
+    const res = await apiClient.get('/corporate-contracts/');
+    return res.data;
+  },
+  createCorporateContract: async (contractData: any) => {
+    const res = await apiClient.post('/corporate-contracts/', contractData);
+    return res.data;
   }
 };
 
