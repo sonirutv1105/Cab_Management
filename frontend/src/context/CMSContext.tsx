@@ -109,9 +109,15 @@ interface CMSContextType {
 const CMSContext = createContext<CMSContextType | undefined>(undefined);
 
 export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [isInitializing, setIsInitializing] = useState<boolean>(true);
-  const [currentUser, setCurrentUserState] = useState<User | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true); // DEMO BYPASS
+  const [isInitializing, setIsInitializing] = useState<boolean>(false); // DEMO BYPASS
+  const [currentUser, setCurrentUserState] = useState<User | null>({
+    id: 'demo-admin-id',
+    name: 'Demo Admin',
+    email: 'admin@demo.com',
+    role: 'super_admin',
+    permissions: []
+  } as any); // DEMO BYPASS
   const [activeModule, setActiveModule] = useState<ModuleType>('Dashboard');
 
   // Load States
@@ -135,6 +141,8 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Validate session on mount
   useEffect(() => {
+    // DEMO BYPASS: Disabled session validation to keep fake user logged in
+    /*
     const token = localStorage.getItem('cms_token');
     if (token) {
       api.getCurrentUser()
@@ -152,6 +160,7 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } else {
       setIsInitializing(false);
     }
+    */
   }, []);
 
   // Fetch ALL dynamic data on authentication (connects every module to backend)
@@ -243,6 +252,8 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const hasPermission = (module: string, action: string) => {
+    return true; // DEMO BYPASS: Allow all permissions for demo purposes
+    /*
     if (currentUser?.role === 'super_admin') return true;
     if (!currentUser?.permissions) return false;
     
@@ -250,6 +261,7 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return currentUser.permissions.some(
       (p) => p.module === module && p.action === action
     );
+    */
   };
 
   const login = async (email: string, pass: string) => {

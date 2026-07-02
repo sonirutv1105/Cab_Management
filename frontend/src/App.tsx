@@ -138,9 +138,10 @@ function AppWrapper() {
   if (window.location.pathname.startsWith('/super-admin')) {
     return <SuperAdminLayout />;
   }
-  if (!isAuthenticated) {
-    return <LoginPage />;
-  }
+  // DEMO BYPASS: Remove authentication check
+  // if (!isAuthenticated) {
+  //   return <LoginPage />;
+  // }
   return <AppContent />;
 }
 
