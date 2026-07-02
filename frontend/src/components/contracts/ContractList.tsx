@@ -10,7 +10,7 @@ import {
 
 interface ContractListProps {
   onView: (id: string) => void;
-  onCreate: (id?: string) => void;
+  onCreate: (id?: string, type?: 'gov' | 'corp') => void;
   viewMode?: 'list' | 'drafts';
 }
 
@@ -387,12 +387,22 @@ export default function ContractList({ onView, onCreate, viewMode = 'list' }: Co
                 const progress = draft.completionPercentage || 0;
                 const currentSectionTitle = draft.activeSection ? SECTION_TITLES[draft.activeSection] : 'Contract Information';
                 const buttonText = progress === 0 ? 'Start Draft' : 'Resume';
+                
+                let isCorp = false;
+                try {
+                  if (draft.formData) {
+                    const fd = typeof draft.formData === 'string' ? JSON.parse(draft.formData) : draft.formData;
+                    if (fd.is_corporate) isCorp = true;
+                  }
+                } catch (e) {}
 
                 return (
                   <div key={draft.id} className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow relative group">
                     <div className="flex justify-between items-start mb-2">
                       <h4 className="font-semibold text-gray-900 dark:text-slate-50 truncate pr-4" title={draft.title || 'Untitled Contract'}>{draft.title || 'Untitled Contract'}</h4>
-                      <span className="text-xs font-medium px-2 py-0.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 rounded-md whitespace-nowrap">Draft</span>
+                      <span className="text-xs font-medium px-2 py-0.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 rounded-md whitespace-nowrap">
+                        {isCorp ? 'Corporate Draft' : 'Draft'}
+                      </span>
                     </div>
                     <div className="text-xs text-gray-500 dark:text-slate-400 mb-2">
                       Last updated {formatDate(draft.updatedAt)}
@@ -412,14 +422,14 @@ export default function ContractList({ onView, onCreate, viewMode = 'list' }: Co
                     <div className="flex justify-between items-center border-t border-gray-100 dark:border-slate-700 pt-3">
                       <button 
                         onClick={() => {
-                          if (window.confirm('Delete this draft?')) deleteDraft(draft.id);
+                          if (window.confirm('Delete this draft?')) deleteDraft(draft.id.toString());
                         }}
                         className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 font-medium flex items-center px-2 py-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
                       >
                         <Trash2 className="w-3 h-3 mr-1" /> Delete
                       </button>
                       <button 
-                        onClick={() => onCreate(draft.id)}
+                        onClick={() => onCreate(draft.id.toString(), isCorp ? 'corp' : 'gov')}
                         className="text-xs text-white bg-gray-800 hover:bg-gray-900 dark:bg-slate-700 dark:hover:bg-slate-600 font-medium px-3 py-1.5 rounded-lg flex items-center transition-colors"
                       >
                         <Edit className="w-3 h-3 mr-1" /> {buttonText}

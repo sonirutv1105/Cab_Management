@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, model_validator, Field
-from typing import Optional, List
+from typing import Optional, List, Any, Dict, Union
 import re
 
 class UserBase(BaseModel):
@@ -383,6 +383,12 @@ class ContractBase(BaseModel):
     # Contract Renewal Termination
     terminationNotice: Optional[str] = None
     terminationClause: Optional[str] = None
+    
+    # Related nested arrays (for create, update, and response)
+    services: Optional[List[Dict[str, Any]]] = []
+    documents: Optional[List[Dict[str, Any]]] = []
+    notes: Optional[List[Dict[str, Any]]] = []
+    payments: Optional[List[Dict[str, Any]]] = []
 
 class ContractCreate(ContractBase):
 
@@ -532,6 +538,11 @@ class ContractUpdate(BaseModel):
     updatedAt: Optional[str] = None
     updatedBy: Optional[str] = None
 
+    services: Optional[List[Dict[str, Any]]] = []
+    documents: Optional[List[Dict[str, Any]]] = []
+    notes: Optional[List[Dict[str, Any]]] = []
+    payments: Optional[List[Dict[str, Any]]] = []
+
 # New Schemas
 class FuelLogBase(BaseModel):
     vehicleId: int
@@ -627,13 +638,13 @@ class AppNotificationUpdate(BaseModel):
 
 class AuditLogBase(BaseModel):
     timestamp: str
-    userId: int
+    userId: Optional[str] = None
     userEmail: str
     userRole: str
     action: str
     module: str
-    details: str
-    ipAddress: str
+    details: Optional[str] = None
+    ipAddress: Optional[str] = None
     status: str = "Success"
 
 class AuditLogCreate(AuditLogBase):
@@ -663,13 +674,13 @@ class SystemSettingUpdate(BaseModel):
     description: Optional[str] = None
 
 class ContractServiceBase(BaseModel):
-    contractId: int
+    contractId: Optional[int] = None
     serviceType: str
     vehiclesCount: int
-    driversCount: int
-    locations: str
-    workingHours: str
-    slaDetails: str
+    driversCount: Optional[int] = None
+    locations: Optional[str] = None
+    workingHours: Optional[str] = None
+    slaDetails: Optional[str] = None
 
 class ContractServiceCreate(ContractServiceBase):
     pass
@@ -804,6 +815,7 @@ class DriverDocumentUpdate(BaseModel):
     is_active: Optional[bool] = None
     updated_at: Optional[str] = None
 class ContractDraftBase(BaseModel):
+    id: Optional[Union[int, str]] = None
     title: Optional[str] = None
     formData: str
     sectionStatus: str
@@ -1110,6 +1122,15 @@ class StateRateCardResponse(StateRateCardBase):
     model_config = ConfigDict(from_attributes=True)
 
 class CorporateContractVehicleBase(BaseModel):
+    @model_validator(mode='before')
+    @classmethod
+    def empty_strings_to_none(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if v == "":
+                    data[k] = None
+        return data
+
     vehicleType: Optional[str] = None
     vehicleCategory: Optional[str] = None
     fuelType: Optional[str] = None
@@ -1135,6 +1156,15 @@ class CorporateContractVehicleResponse(CorporateContractVehicleBase):
     model_config = ConfigDict(from_attributes=True)
 
 class CorporateContractBase(BaseModel):
+    @model_validator(mode='before')
+    @classmethod
+    def empty_strings_to_none(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if v == "":
+                    data[k] = None
+        return data
+
     contractNumber: Optional[str] = None
     contractName: Optional[str] = None
     company: Optional[str] = None
@@ -1194,14 +1224,106 @@ class CorporateContractBase(BaseModel):
     approvalDate: Optional[str] = None
     createdAt: Optional[str] = None
 
+
+class CorporateContractClientDetailBase(BaseModel):
+    @model_validator(mode='before')
+    @classmethod
+    def empty_strings_to_none(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if v == "":
+                    data[k] = None
+        return data
+
+    companyCode: Optional[str] = None
+    gstNumber: Optional[str] = None
+    panNumber: Optional[str] = None
+    billingAddress: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+
+class CorporateContractClientDetailCreate(CorporateContractClientDetailBase):
+    pass
+
+class CorporateContractClientDetailResponse(CorporateContractClientDetailBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
 class CorporateContractCreate(CorporateContractBase):
     vehicles: List[CorporateContractVehicleCreate] = []
+    client_details: Optional[CorporateContractClientDetailCreate] = None
 
 class CorporateContractResponse(CorporateContractBase):
     id: int
     vehicles: List[CorporateContractVehicleResponse] = []
+    client_details: Optional[CorporateContractClientDetailResponse] = None
     model_config = ConfigDict(from_attributes=True)
 
 class CorporateContractUpdate(BaseModel):
     # For now, simplistic update if needed
     pass
+
+class CorporateContractDocumentBase(BaseModel):
+    document_type: Optional[str] = None
+    file_url: Optional[str] = None
+    uploaded_by: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+class CorporateContractDocumentCreate(CorporateContractDocumentBase):
+    pass
+
+class CorporateContractDocumentResponse(CorporateContractDocumentBase):
+    id: int
+    contract_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class CorporateContractApprovalBase(BaseModel):
+    step: Optional[str] = None
+    status: Optional[str] = None
+    approver_id: Optional[str] = None
+    comments: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+class CorporateContractApprovalCreate(CorporateContractApprovalBase):
+    pass
+
+class CorporateContractApprovalResponse(CorporateContractApprovalBase):
+    id: int
+    contract_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class CorporateContractRenewalBase(BaseModel):
+    renewal_date: Optional[str] = None
+    previous_end_date: Optional[str] = None
+    new_end_date: Optional[str] = None
+    terms: Optional[str] = None
+    status: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+class CorporateContractRenewalCreate(CorporateContractRenewalBase):
+    pass
+
+class CorporateContractRenewalResponse(CorporateContractRenewalBase):
+    id: int
+    contract_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class CorporateContractHistoryBase(BaseModel):
+    modified_by: Optional[str] = None
+    action: Optional[str] = None
+    previous_state: Optional[str] = None
+    new_state: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+class CorporateContractHistoryCreate(CorporateContractHistoryBase):
+    pass
+
+class CorporateContractHistoryResponse(CorporateContractHistoryBase):
+    id: int
+    contract_id: int
+    model_config = ConfigDict(from_attributes=True)

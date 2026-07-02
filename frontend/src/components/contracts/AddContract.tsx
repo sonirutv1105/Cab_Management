@@ -16,9 +16,14 @@ interface AddContractProps {
 }
 
 export default function AddContract({ onClose, onSuccess, resumeId }: AddContractProps) {
-  // If a resumeId exists (e.g. from a draft), we default to GovernmentContractForm for now,
-  // as the old drafts were based on the single monolithic form.
-  const [step, setStep] = useState<AddContractStep>(resumeId ? 'form_gov' : 'select_main');
+  const urlParams = new URLSearchParams(window.location.search);
+  const isCorp = urlParams.get('type') === 'corp';
+
+  // If a resumeId exists (e.g. from a draft), we default to GovernmentContractForm,
+  // unless type=corp is specified in the URL.
+  const [step, setStep] = useState<AddContractStep>(
+    resumeId ? (isCorp ? 'placeholder_corp' : 'form_gov') : 'select_main'
+  );
 
   const handleMainTypeNext = (type: ContractMainType) => {
     if (type === 'Government') {
@@ -51,6 +56,7 @@ export default function AddContract({ onClose, onSuccess, resumeId }: AddContrac
         <CorporateContractForm 
           onBack={() => setStep('select_main')} 
           onSuccess={onSuccess} 
+          resumeId={resumeId}
         />
       );
 

@@ -205,7 +205,32 @@ export const api = {
   getContractActivityLogs: () => apiClient.get<ContractActivityLog[]>('/contract-activity/').then(res => res.data),
   createContractActivityLog: (log: Partial<ContractActivityLog>) => apiClient.post<ContractActivityLog>('/contract-activity/', log).then(res => res.data),
 
-  // ─── Super Admin ───
+
+
+  // ─── Corporate Contract Documents ───
+  getCorporateContractDocuments: (contractId: number) => apiClient.get<any[]>(`/api/corporate-contracts/${contractId}/documents`).then(res => res.data),
+  createCorporateContractDocument: (contractId: number, doc: any) => apiClient.post<any>(`/api/corporate-contracts/${contractId}/documents`, doc).then(res => res.data),
+  updateCorporateContractDocument: (docId: number, doc: any) => apiClient.put<any>(`/api/corporate-contracts/documents/${docId}`, doc).then(res => res.data),
+  deleteCorporateContractDocument: (docId: number) => apiClient.delete(`/api/corporate-contracts/documents/${docId}`).then(res => res.data),
+
+  // ─── Corporate Contract Approvals ───
+  getCorporateContractApprovals: (contractId: number) => apiClient.get<any[]>(`/api/corporate-contracts/${contractId}/approvals`).then(res => res.data),
+  createCorporateContractApproval: (contractId: number, approval: any) => apiClient.post<any>(`/api/corporate-contracts/${contractId}/approvals`, approval).then(res => res.data),
+  updateCorporateContractApproval: (approvalId: number, approval: any) => apiClient.put<any>(`/api/corporate-contracts/approvals/${approvalId}`, approval).then(res => res.data),
+  deleteCorporateContractApproval: (approvalId: number) => apiClient.delete(`/api/corporate-contracts/approvals/${approvalId}`).then(res => res.data),
+
+  // ─── Corporate Contract Renewals ───
+  getCorporateContractRenewals: (contractId: number) => apiClient.get<any[]>(`/api/corporate-contracts/${contractId}/renewals`).then(res => res.data),
+  createCorporateContractRenewal: (contractId: number, renewal: any) => apiClient.post<any>(`/api/corporate-contracts/${contractId}/renewals`, renewal).then(res => res.data),
+  updateCorporateContractRenewal: (renewalId: number, renewal: any) => apiClient.put<any>(`/api/corporate-contracts/renewals/${renewalId}`, renewal).then(res => res.data),
+  deleteCorporateContractRenewal: (renewalId: number) => apiClient.delete(`/api/corporate-contracts/renewals/${renewalId}`).then(res => res.data),
+
+  // ─── Corporate Contract History ───
+  getCorporateContractHistory: (contractId: number) => apiClient.get<any[]>(`/api/corporate-contracts/${contractId}/history`).then(res => res.data),
+  createCorporateContractHistory: (contractId: number, history: any) => apiClient.post<any>(`/api/corporate-contracts/${contractId}/history`, history).then(res => res.data),
+
+  // ─── Corporate Contract Export ───
+  exportCorporateContracts: () => apiClient.get<any[]>('/api/corporate-contracts/export/csv').then(res => res.data),
   getSuperAdminStats: () => apiClient.get<any>('/super-admin/dashboard-stats').then(res => res.data),
   getSuperAdminAuditLogs: () => apiClient.get<any[]>('/super-admin/audit-logs').then(res => res.data),
   getSuperAdminCompanies: () => apiClient.get<any[]>('/super-admin/companies').then(res => res.data),
@@ -275,6 +300,18 @@ export const api = {
   },
   createCorporateContract: async (contractData: any) => {
     const res = await apiClient.post('/corporate-contracts/', contractData);
+    return res.data;
+  },
+  getCorporateContract: async (id: number | string) => {
+    const res = await apiClient.get(`/corporate-contracts/${id}`);
+    return res.data;
+  },
+  updateCorporateContract: async (id: number | string, contractData: any) => {
+    const res = await apiClient.put(`/corporate-contracts/${id}`, contractData);
+    return res.data;
+  },
+  deleteCorporateContract: async (id: number | string) => {
+    const res = await apiClient.delete(`/corporate-contracts/${id}`);
     return res.data;
   }
 };

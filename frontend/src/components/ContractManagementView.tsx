@@ -51,20 +51,25 @@ export default function ContractManagementView() {
     setActiveTab('details');
   };
 
-  const handleCreateContract = (id?: string) => {
+  const handleCreateContract = (id?: string, type?: 'gov' | 'corp') => {
     if (id !== undefined) {
       if (typeof id === 'object' || id === '[object Object]') {
         console.error('Contract ID must be primitive. Invalid ID detected:', id);
         throw new Error('Contract ID must be primitive. Invalid ID detected.');
       }
     }
-    console.log('Contract ID:', id);
-    console.log('Contract ID Type:', typeof id);
+    console.log('Contract ID:', id, 'Type:', type);
     
     setIsCreatingContract(true);
     setResumeId(id);
     const basePath = window.location.pathname.startsWith('/super-admin') ? '/super-admin/contracts/new' : '/contracts/new';
-    const finalUrl = id ? `${basePath}?resume=${id}` : basePath;
+    
+    let finalUrl = basePath;
+    const params = new URLSearchParams();
+    if (id) params.set('resume', id);
+    if (type === 'corp') params.set('type', 'corp');
+    if (params.toString()) finalUrl += `?${params.toString()}`;
+    
     window.history.pushState(null, '', finalUrl);
   };
 

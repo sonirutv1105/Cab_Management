@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Save, AlertCircle, FileText, ArrowLeft, ChevronRight, Plus, Trash2, CheckCircle2, RefreshCw } from 'lucide-react';
 import { CorporateContractVehicle } from '../../types';
+import { api } from '../../api/client';
+import { INDIAN_STATES } from '../../utils/indianStates';
+import { useContracts } from '../../context/ContractContext';
 
 const SECTION_FIELDS: Record<string, { required: string[], optional: string[] }> = {
   'A': { required: ['contractName'], optional: ['priority', 'description'] },
-  'B': { required: ['company'], optional: ['branch', 'gst', 'billingAddress'] },
-  'C': { required: [], optional: ['clientContactPerson', 'clientMobile', 'clientEmail'] },
+  'B': { required: ['companyName'], optional: ['branchName', 'companyCode', 'gstNumber', 'panNumber', 'billingAddress', 'city', 'state', 'pincode', 'contactPerson', 'contactNumber', 'emailAddress'] },
   'D': { required: ['operatingState'], optional: ['operatingCity', 'officeLocation', 'serviceRadius'] },
   'E': { required: [], optional: [] }, // Vehicles
   'F': { required: [], optional: [] }, // Pricing
@@ -60,16 +62,15 @@ const WizardStep = ({ id, currentStep, children }: { id: string, currentStep: st
 export const STEPS = [
   { id: 'A', title: 'Contract Information', icon: '📄' },
   { id: 'B', title: 'Company & Branch', icon: '🏢' },
-  { id: 'C', title: 'Client Information', icon: '👤' },
   { id: 'D', title: 'Service Locations', icon: '📍' },
   { id: 'E', title: 'Vehicle Configuration', icon: '🚗' },
   { id: 'F', title: 'Pricing & Rate Card', icon: '💰' },
   { id: 'G', title: 'Service Configuration', icon: '🛠️' },
   { id: 'H', title: 'Driver Configuration', icon: '👨‍✈️' },
   { id: 'I', title: 'Billing & Payment', icon: '💳' },
-  { id: 'J', title: 'Documents', icon: '📎' },
-  { id: 'K', title: 'Terms & Conditions', icon: '⚖️' },
-  { id: 'L', title: 'Review & Save', icon: '✅' }
+  { id: 'J', title: 'Documents & Attachments', icon: '📎' },
+  { id: 'K', title: 'Terms & Approvals', icon: '✅' },
+  { id: 'L', title: 'Review & Submit', icon: '👁️' }
 ];
 
 const InputField = ({ label, name, type = 'text', required = false, placeholder = '', fullWidth = false, autoCalc = false, disabled = false, min = undefined, helperText = '', prefix = '', formData, handleChange, handleBlur, errors = {} }: any) => {
@@ -208,11 +209,6 @@ const INITIAL_VEHICLE: CorporateContractVehicle = {
   remarks: ''
 };
 
-const MOCK_COMPANIES = {
-  'Acme Corp': { gst: '27AADCB2230M1Z2', branch: 'Mumbai Head Office', address: 'Bandra Kurla Complex, Mumbai', contact: 'John Doe', email: 'john@acme.com', phone: '9876543210' },
-  'Globex Inc': { gst: '24AAACC1206D1Z1', branch: 'Ahmedabad IT Park', address: 'SG Highway, Ahmedabad', contact: 'Jane Smith', email: 'jane@globex.com', phone: '9988776655' }
-};
-
 const MOCK_RATE_CARDS: any = {
   'Gujarat': { Sedan: { base: 12, night: 150, driver: 300 }, SUV: { base: 15, night: 200, driver: 400 }, Innova: { base: 18, night: 250, driver: 500 } },
   'Maharashtra': { Sedan: { base: 14, night: 200, driver: 400 }, SUV: { base: 18, night: 250, driver: 500 }, Innova: { base: 20, night: 300, driver: 600 } }
@@ -223,23 +219,30 @@ interface CorporateContractFormProps {
   onSuccess: (id: string) => void;
 }
 
-export default function CorporateContractForm({ onBack, onSuccess }: CorporateContractFormProps) {
+export default function CorporateContractForm({ onBack, onSuccess, resumeId }: CorporateContractFormProps & { resumeId?: string }) {
   const [currentStep, setCurrentStep] = useState<string>('A');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [rateCards, setRateCards] = useState<any>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [editId, setEditId] = useState<string | null>(resumeId || null);
 
   const [formData, setFormData] = useState<any>({
-    contractNumber: `CORP-${Date.now()}`,
     contractName: '',
     priority: 'Normal',
     description: '',
-    company: '',
-    branch: '',
-    gst: '',
+    company_id: null,
+    companyName: '',
+    branchName: '',
+    companyCode: '',
+    gstNumber: '',
+    panNumber: '',
     billingAddress: '',
-    clientContactPerson: '',
-    clientMobile: '',
-    clientEmail: '',
+    city: '',
+    state: '',
+    pincode: '',
+    contactPerson: '',
+    contactNumber: '',
+    emailAddress: '',
     operatingState: '',
     operatingCity: '',
     officeLocation: '',
@@ -266,6 +269,37 @@ export default function CorporateContractForm({ onBack, onSuccess }: CorporateCo
     renewalClause: '',
     documents: ''
   });
+
+  // Derived available cities
+  const availableCities = formData.operatingState && INDIAN_STATES[formData.operatingState] 
+    ? INDIAN_STATES[formData.operatingState] 
+    : [];
+
+  useEffect(() => {
+    if (editId) {
+      api.getCorporateContract(editId).then(data => {
+        setFormData((prev: any) => ({
+          ...prev,
+          ...data,
+          companyName: data.company || '',
+          branchName: data.branch || '',
+          contactPerson: data.clientContactPerson || '',
+          contactNumber: data.clientMobile || '',
+          emailAddress: data.clientEmail || '',
+          gstPercent: data.gst || '',
+          tdsPercent: data.tds || '',
+          companyCode: data.client_details?.companyCode || '',
+          gstNumber: data.client_details?.gstNumber || '',
+          panNumber: data.client_details?.panNumber || '',
+          billingAddress: data.client_details?.billingAddress || '',
+          city: data.client_details?.city || '',
+          state: data.client_details?.state || '',
+          pincode: data.client_details?.pincode || '',
+          vehicles: data.vehicles?.length ? data.vehicles : [{ ...INITIAL_VEHICLE }]
+        }));
+      }).catch(err => console.error("Error loading draft", err));
+    }
+  }, [editId]);
 
   useEffect(() => {
     if (formData.operatingState) {
@@ -296,6 +330,18 @@ export default function CorporateContractForm({ onBack, onSuccess }: CorporateCo
 
   const validateField = (name: string, value: any, required: boolean): string | null => {
     if (required && !checkFilled(value)) return 'This field is required';
+    if (value && typeof value === 'string') {
+      const val = value.trim();
+      if (name === 'gstNumber' && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(val)) {
+        return 'Invalid GST format (e.g., 22AAAAA0000A1Z5)';
+      }
+      if ((name === 'emailAddress' || name === 'clientEmail') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+        return 'Invalid email address';
+      }
+      if ((name === 'contactNumber' || name === 'clientMobile') && !/^\d{10}$/.test(val)) {
+        return 'Phone must be 10 digits';
+      }
+    }
     return null;
   };
 
@@ -314,26 +360,15 @@ export default function CorporateContractForm({ onBack, onSuccess }: CorporateCo
     let newValue: any = value;
     
     if (type === 'checkbox') newValue = (e.target as HTMLInputElement).checked;
+    else if (typeof newValue === 'string') newValue = newValue.trimStart(); 
 
-    if (name === 'company') {
-      const details = (MOCK_COMPANIES as any)[newValue];
-      setFormData((prev: any) => ({
-        ...prev,
-        [name]: newValue,
-        ...(details ? {
-          gst: details.gst,
-          branch: details.branch,
-          billingAddress: details.address,
-          clientContactPerson: details.contact,
-          clientEmail: details.email,
-          clientMobile: details.phone
-        } : {
-          gst: '', branch: '', billingAddress: '', clientContactPerson: '', clientEmail: '', clientMobile: ''
-        })
-      }));
-    } else {
-      setFormData((prev: any) => ({ ...prev, [name]: newValue }));
-    }
+    setFormData((prev: any) => {
+      const next = { ...prev, [name]: newValue };
+      if (name === 'operatingState') {
+        next.operatingCity = '';
+      }
+      return next;
+    });
 
     const error = validateField(name, newValue, required);
     setErrors(prev => {
@@ -379,11 +414,12 @@ export default function CorporateContractForm({ onBack, onSuccess }: CorporateCo
     return isValid;
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (!validateStep(currentStep)) {
       alert('Please complete all required fields before proceeding.');
       return;
     }
+
 
     const currentIndex = STEPS.findIndex(s => s.id === currentStep);
     if (currentIndex < STEPS.length - 1) {
@@ -398,34 +434,109 @@ export default function CorporateContractForm({ onBack, onSuccess }: CorporateCo
     }
   };
 
-  const handleDummySubmit = () => {
-    alert("Dummy Corporate Contract Saved Successfully!");
-    onBack();
+  const { saveDraft, drafts } = useContracts();
+  const [internalContractId, setInternalContractId] = useState<string>(resumeId || `CORP-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`);
+
+  const handleSubmit = async (isDraft = false) => {
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        ...formData,
+        contractStatus: isDraft ? 'Draft' : 'Active',
+        company: formData.companyName,
+        branch: formData.branchName,
+        clientContactPerson: formData.contactPerson,
+        clientMobile: formData.contactNumber,
+        clientEmail: formData.emailAddress,
+        gst: parseFloat(formData.gstPercent) || 0.0,
+        tds: parseFloat(formData.tdsPercent) || 0.0,
+        client_details: {
+          companyCode: formData.companyCode,
+          gstNumber: formData.gstNumber,
+          panNumber: formData.panNumber,
+          billingAddress: formData.billingAddress,
+          city: formData.city,
+          state: formData.state,
+          pincode: formData.pincode,
+        }
+      };
+
+      if (isDraft) {
+        const draftData = {
+          id: internalContractId,
+          title: formData.contractName || 'Untitled Corporate Draft',
+          formData: JSON.stringify({ ...payload, is_corporate: true }),
+          sectionStatus: "{}",
+          activeSection: currentStep,
+          updatedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          completionPercentage: 50.0,
+          attachments: "[]"
+        };
+        await saveDraft(draftData as any);
+        alert("Draft saved successfully.");
+        
+        // Update URL to use internalContractId
+        const url = new URL(window.location.href);
+        url.searchParams.set('resume', internalContractId);
+        url.searchParams.set('type', 'corp');
+        window.history.replaceState({}, '', url.toString());
+        return;
+      }
+
+      if (editId && !editId.toString().startsWith('CORP-')) {
+        await api.updateCorporateContract(editId, payload);
+        alert("Corporate Contract updated successfully!");
+        onSuccess(editId);
+      } else {
+        const response = await api.createCorporateContract(payload);
+        alert("Corporate Contract created successfully!");
+        if (response && response.id) {
+          onSuccess(String(response.id));
+        } else {
+          onBack();
+        }
+      }
+    } catch (error) {
+      console.error("Failed to save corporate contract:", error);
+      alert("Failed to save Corporate Contract. Please check the form data.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
 
-  const updateVehicle = (index: number, field: string, value: any) => {
+  const updateVehicle = (field: string, value: any) => {
     const newV = [...formData.vehicles];
-    newV[index][field] = value;
+    newV[0][field] = value;
     
-    // Auto populate rate card
-    if (field === 'vehicleCategory' && rateCards && rateCards[value]) {
-       newV[index].extraKmCharge = rateCards[value].base;
-       newV[index].nightCharges = rateCards[value].night;
-       newV[index].driverAllowance = rateCards[value].driver;
+    // Auto populate rate card based on first category selected if applicable
+    if (field === 'vehicleCategory') {
+       const cats = value.split(',').filter(Boolean);
+       const firstCat = cats[0];
+       if (firstCat && rateCards && rateCards[firstCat]) {
+         newV[0].extraKmCharge = rateCards[firstCat].base;
+         newV[0].nightCharges = rateCards[firstCat].night;
+         newV[0].driverAllowance = rateCards[firstCat].driver;
+       }
     }
     
     setFormData((prev: any) => ({ ...prev, vehicles: newV }));
   };
-
-  const addVehicle = () => {
-    setFormData((prev: any) => ({ ...prev, vehicles: [...prev.vehicles, { ...INITIAL_VEHICLE }] }));
+  
+  const handleVehicleCategoryToggle = (category: string) => {
+    const currentCategories = formData.vehicles[0].vehicleCategory 
+      ? formData.vehicles[0].vehicleCategory.split(',').map((s: string) => s.trim()).filter(Boolean)
+      : [];
+      
+    let newCategories;
+    if (currentCategories.includes(category)) {
+      newCategories = currentCategories.filter((c: string) => c !== category);
+    } else {
+      newCategories = [...currentCategories, category];
+    }
+    updateVehicle('vehicleCategory', newCategories.join(', '));
   };
-
-  const removeVehicle = (index: number) => {
-    setFormData((prev: any) => ({ ...prev, vehicles: prev.vehicles.filter((_: any, i: number) => i !== index) }));
-  };
-
 
   return (
     <div className="bg-[#f8fafc] dark:bg-gray-900 flex flex-col w-full h-full absolute inset-0 z-50 overflow-hidden">
@@ -508,9 +619,9 @@ export default function CorporateContractForm({ onBack, onSuccess }: CorporateCo
         </div>
 
         {/* Main Form Area */}
-        <div className="flex-1 overflow-y-auto p-6 md:p-10 custom-scrollbar bg-[#f8fafc] dark:bg-slate-900/50">
-          <div className="max-w-4xl mx-auto">
-            <div className="mb-6">
+        <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-6 custom-scrollbar bg-[#f8fafc] dark:bg-slate-900/50">
+          <div className="w-full">
+            <div className="mb-4">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
                 <span className="mr-3">{STEPS.find(s => s.id === currentStep)?.icon}</span>
                 {STEPS.find(s => s.id === currentStep)?.title}
@@ -520,23 +631,26 @@ export default function CorporateContractForm({ onBack, onSuccess }: CorporateCo
             <div className="bg-white dark:bg-slate-800 shadow-sm border border-gray-200 dark:border-slate-700 rounded-xl p-6 md:p-8 mb-24">
               
               <WizardStep id="A" currentStep={currentStep}>
-                <InputField label="Contract Number (Auto)" name="contractNumber" formData={formData} disabled />
                 <InputField label="Contract Name" name="contractName" required formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
                 <SelectField label="Priority" name="priority" options={['Normal', 'High', 'Urgent']} formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
                 <InputField label="Description" name="description" fullWidth formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
               </WizardStep>
 
               <WizardStep id="B" currentStep={currentStep}>
-                <SelectField label="Select Company" name="company" options={Object.keys(MOCK_COMPANIES)} required formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
-                <InputField label="Branch" name="branch" disabled={!formData.company} formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
-                <InputField label="GST Number" name="gst" disabled={!formData.company} formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
-                <InputField label="Billing Address" name="billingAddress" fullWidth disabled={!formData.company} formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
-              </WizardStep>
-
-              <WizardStep id="C" currentStep={currentStep}>
-                <InputField label="Contact Person" name="clientContactPerson" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
-                <InputField label="Contact Phone" name="clientMobile" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
-                <InputField label="Contact Email" name="clientEmail" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
+                <InputField label="Company Name" name="companyName" required formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
+                <InputField label="Branch Name" name="branchName" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
+                <InputField label="Company Code" name="companyCode" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
+                <InputField label="GST Number" name="gstNumber" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
+                <InputField label="PAN Number" name="panNumber" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
+                <div className="col-span-1 md:col-span-2">
+                  <InputField label="Billing Address" name="billingAddress" fullWidth formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
+                </div>
+                <InputField label="City" name="city" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
+                <InputField label="State" name="state" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
+                <InputField label="Pincode" name="pincode" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
+                <InputField label="Contact Person" name="contactPerson" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
+                <InputField label="Contact Number" name="contactNumber" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
+                <InputField label="Email Address" name="emailAddress" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
               </WizardStep>
 
               <WizardStep id="D" currentStep={currentStep}>
@@ -544,8 +658,24 @@ export default function CorporateContractForm({ onBack, onSuccess }: CorporateCo
                   <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
                   <p className="text-sm text-blue-800">Selecting a state automatically maps the correct State Rate Card for pricing logic in the later steps.</p>
                 </div>
-                <SelectField label="Operating State" name="operatingState" required options={['Gujarat', 'Maharashtra']} formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
-                <InputField label="Operating City" name="operatingCity" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
+                <SelectField label="Operating State" name="operatingState" required options={Object.keys(INDIAN_STATES)} formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
+                <div className={""}>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                    Operating City
+                  </label>
+                  <select
+                    name="operatingCity"
+                    value={formData.operatingCity || ''}
+                    onChange={handleChange}
+                    disabled={!formData.operatingState}
+                    className={`w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm px-4 py-2 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${!formData.operatingState ? 'opacity-50 cursor-not-allowed bg-gray-50' : ''}`}
+                  >
+                    <option value="" disabled>Select Operating City</option>
+                    {availableCities.map((city) => (
+                      <option key={city} value={city}>{city}</option>
+                    ))}
+                  </select>
+                </div>
                 <InputField label="Office Location" name="officeLocation" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
                 <InputField label="Service Radius (KM)" name="serviceRadius" type="number" formData={formData} handleChange={handleChange} handleBlur={handleBlur} errors={errors} />
               </WizardStep>
@@ -553,10 +683,7 @@ export default function CorporateContractForm({ onBack, onSuccess }: CorporateCo
               <WizardStep id="E" currentStep={currentStep}>
                 <div className="col-span-1 md:col-span-2">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-gray-900">Vehicle Fleet Config</h3>
-                    <button onClick={addVehicle} type="button" className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium">
-                      <Plus className="w-4 h-4"/> Add Vehicle Row
-                    </button>
+                    <h3 className="font-bold text-gray-900">Vehicle Config</h3>
                   </div>
                   <div className="overflow-x-auto border border-gray-200 rounded-xl">
                     <table className="w-full text-sm text-left whitespace-nowrap">
@@ -566,26 +693,29 @@ export default function CorporateContractForm({ onBack, onSuccess }: CorporateCo
                           <th className="px-4 py-3 font-semibold">Quantity</th>
                           <th className="px-4 py-3 font-semibold">Monthly KM</th>
                           <th className="px-4 py-3 font-semibold">Min Hours</th>
-                          <th className="px-4 py-3 text-center font-semibold">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {formData.vehicles.map((v: any, i: number) => (
+                        {formData.vehicles.slice(0, 1).map((v: any, i: number) => (
                           <tr key={i} className="hover:bg-gray-50">
                             <td className="px-4 py-2">
-                              <select className="w-32 bg-white border border-gray-300 rounded-md p-1.5 focus:ring-1 focus:ring-blue-500" value={v.vehicleCategory} onChange={(e) => updateVehicle(i, 'vehicleCategory', e.target.value)}>
-                                <option value="">Select</option>
-                                <option value="Sedan">Sedan</option>
-                                <option value="SUV">SUV</option>
-                                <option value="Innova">Innova</option>
-                              </select>
+                              <div className="flex flex-col gap-1">
+                                {['Sedan', 'SUV', 'Innova'].map(cat => (
+                                  <label key={cat} className="inline-flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                      checked={(v.vehicleCategory || '').split(',').map((s: string) => s.trim()).includes(cat)}
+                                      onChange={() => handleVehicleCategoryToggle(cat)}
+                                    />
+                                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">{cat}</span>
+                                  </label>
+                                ))}
+                              </div>
                             </td>
-                            <td className="px-4 py-2"><input type="number" className="w-20 bg-white border border-gray-300 rounded-md p-1.5" value={v.quantity} onChange={(e) => updateVehicle(i, 'quantity', Number(e.target.value))}/></td>
-                            <td className="px-4 py-2"><input type="number" className="w-24 bg-white border border-gray-300 rounded-md p-1.5" value={v.monthlyKmIncluded} onChange={(e) => updateVehicle(i, 'monthlyKmIncluded', Number(e.target.value))}/></td>
-                            <td className="px-4 py-2"><input type="number" className="w-24 bg-white border border-gray-300 rounded-md p-1.5" value={v.minimumBillingHours} onChange={(e) => updateVehicle(i, 'minimumBillingHours', Number(e.target.value))}/></td>
-                            <td className="px-4 py-2 text-center">
-                              <button type="button" onClick={() => removeVehicle(i)} className="text-red-500 p-1 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4"/></button>
-                            </td>
+                            <td className="px-4 py-2"><input type="number" className="w-20 bg-white border border-gray-300 rounded-md p-1.5" value={v.quantity} onChange={(e) => updateVehicle('quantity', Number(e.target.value))}/></td>
+                            <td className="px-4 py-2"><input type="number" className="w-24 bg-white border border-gray-300 rounded-md p-1.5" value={v.monthlyKmIncluded} onChange={(e) => updateVehicle('monthlyKmIncluded', Number(e.target.value))}/></td>
+                            <td className="px-4 py-2"><input type="number" className="w-24 bg-white border border-gray-300 rounded-md p-1.5" value={v.minimumBillingHours} onChange={(e) => updateVehicle('minimumBillingHours', Number(e.target.value))}/></td>
                           </tr>
                         ))}
                       </tbody>
@@ -604,7 +734,7 @@ export default function CorporateContractForm({ onBack, onSuccess }: CorporateCo
                     </div>
                   </div>
                   <div className="grid gap-4">
-                    {formData.vehicles.map((v: any, i: number) => {
+                    {formData.vehicles.slice(0, 1).map((v: any, i: number) => {
                       const matchedRate = rateCards && v.vehicleCategory ? rateCards[v.vehicleCategory] : null;
                       return (
                         <div key={i} className="bg-white p-4 rounded-xl border border-gray-200 flex items-center justify-between">
@@ -676,10 +806,9 @@ export default function CorporateContractForm({ onBack, onSuccess }: CorporateCo
                       <p className="text-gray-400 mt-1">{formData.contractNumber}</p>
                     </div>
                     <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-6">
-                      <div><p className="text-xs text-gray-500 uppercase font-semibold">Company</p><p className="font-bold text-lg">{formData.company || 'N/A'}</p></div>
+                      <div><p className="text-xs text-gray-500 uppercase font-semibold">Company</p><p className="font-bold text-lg">{formData.companyName || 'N/A'}</p></div>
                       <div><p className="text-xs text-gray-500 uppercase font-semibold">State</p><p className="font-bold text-lg">{formData.operatingState || 'N/A'}</p></div>
                       <div><p className="text-xs text-gray-500 uppercase font-semibold">Billing Cycle</p><p className="font-bold text-lg">{formData.billingCycle || 'N/A'}</p></div>
-                      <div><p className="text-xs text-gray-500 uppercase font-semibold">Total Vehicles</p><p className="font-bold text-lg">{formData.vehicles.length}</p></div>
                     </div>
                   </div>
                   <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex gap-3 items-center text-emerald-800">
@@ -707,25 +836,37 @@ export default function CorporateContractForm({ onBack, onSuccess }: CorporateCo
         <div className="flex gap-3">
           <button
             type="button"
-            onClick={() => alert('Draft saved (Dummy)')}
+            onClick={() => handleSubmit(true)}
             className="px-6 py-2.5 bg-white border border-gray-300 dark:border-slate-700 dark:bg-slate-800 text-gray-700 dark:text-slate-200 rounded-lg text-sm font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 transition-all shadow-sm flex items-center"
+            disabled={isSubmitting}
           >
             <Save className="w-4 h-4 mr-2" />
-            Save Draft
+            {isSubmitting ? 'Saving...' : 'Save Draft'}
           </button>
           {currentStep === STEPS[STEPS.length - 1].id ? (
-            <button
-              type="button"
-              onClick={handleDummySubmit}
-              className="px-8 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm shadow-blue-200 dark:shadow-none flex items-center"
-            >
-              Submit Contract
-            </button>
+              <button
+                type="button"
+                onClick={() => handleSubmit(false)}
+                disabled={isSubmitting}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm flex items-center"
+              >
+                {isSubmitting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Final Submit
+                  </>
+                )}
+              </button>
           ) : (
             <button
               type="button"
               onClick={handleNext}
-              className="px-8 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg text-sm font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-all shadow-sm flex items-center"
+              className="px-8 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm shadow-blue-200 dark:shadow-none flex items-center"
             >
               Save & Next
             </button>

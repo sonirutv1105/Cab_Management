@@ -4,8 +4,9 @@ import {
   CheckCircle, Clock, Calendar, 
   IndianRupee, MapPin, Users, Download, Upload, Plus, Edit,
   Activity, MessageSquare, CreditCard, PlayCircle, StopCircle,
-  RefreshCw, AlertCircle, ArrowLeft, FileText
+  RefreshCw, AlertCircle, ArrowLeft, FileText, CheckCircle2
 } from 'lucide-react';
+import { api } from '../../api/client';
 
 interface ContractDetailsProps {
   contractId: string;
@@ -58,6 +59,37 @@ export default function ContractDetails({ contractId, onBack }: ContractDetailsP
   const contractPayments = payments.filter(p => p.contractId === contractId);
   const contractLogs = activityLogs.filter(l => l.contractId === contractId).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
+  // Corporate Contract Data States
+  const [corpApprovals, setCorpApprovals] = React.useState<any[]>([]);
+  const [corpRenewals, setCorpRenewals] = React.useState<any[]>([]);
+  const [corpDocs, setCorpDocs] = React.useState<any[]>([]);
+  const [corpHistory, setCorpHistory] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    // Attempt to fetch corporate data; if 404/error, it means it's not a corporate contract or no data
+    if (contract) {
+      const cId = parseInt(contractId, 10);
+      if (!isNaN(cId)) {
+        api.getCorporateContractApprovals(cId).then(setCorpApprovals).catch(() => {});
+        api.getCorporateContractRenewals(cId).then(setCorpRenewals).catch(() => {});
+        api.getCorporateContractDocuments(cId).then(setCorpDocs).catch(() => {});
+        api.getCorporateContractHistory(cId).then(setCorpHistory).catch(() => {});
+      }
+    }
+  }, [contractId, contract]);
+
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: Activity },
+    { id: 'info', label: 'Information', icon: FileText },
+    { id: 'services', label: 'Services', icon: Users },
+    { id: 'documents', label: 'Documents', icon: Download },
+    { id: 'approvals', label: 'Approvals', icon: CheckCircle2 },
+    { id: 'renewals', label: 'Renewals', icon: RefreshCw },
+    { id: 'payments', label: 'Payments', icon: CreditCard },
+    { id: 'timeline', label: 'Timeline', icon: Clock },
+    { id: 'notes', label: 'Notes', icon: MessageSquare },
+  ];
+
   // Formatting utilities
   const formatCurrency = (val: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -85,15 +117,6 @@ export default function ContractDetails({ contractId, onBack }: ContractDetailsP
     return <span className={`px-3 py-1 rounded-full text-xs font-bold ${color}`}>{status}</span>;
   };
 
-  const tabs = [
-    { id: 'overview', label: 'Overview', icon: Activity },
-    { id: 'info', label: 'Information', icon: FileText },
-    { id: 'services', label: 'Services', icon: Users },
-    { id: 'documents', label: 'Documents', icon: Download },
-    { id: 'payments', label: 'Payments', icon: CreditCard },
-    { id: 'timeline', label: 'Timeline', icon: Clock },
-    { id: 'notes', label: 'Notes', icon: MessageSquare },
-  ];
 
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden">
@@ -315,20 +338,20 @@ export default function ContractDetails({ contractId, onBack }: ContractDetailsP
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
-                {contractDocs.length === 0 ? (
+                {contractDocs.length === 0 && corpDocs.length === 0 ? (
                   <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500 dark:text-slate-400">No documents uploaded.</td></tr>
                 ) : (
-                  contractDocs.map(doc => (
-                    <tr key={doc.id} className="hover:bg-gray-50 dark:hover:bg-slate-800">
+                  [...contractDocs, ...corpDocs].map((doc, idx) => (
+                    <tr key={doc.id || idx} className="hover:bg-gray-50 dark:hover:bg-slate-800">
                       <td className="px-6 py-4 font-medium text-blue-600 cursor-pointer hover:underline flex items-center">
-                        <FileText className="w-4 h-4 mr-2 text-gray-400 dark:text-slate-400" /> {doc.title}
+                        <FileText className="w-4 h-4 mr-2 text-gray-400 dark:text-slate-400" /> {doc.title || doc.documentName || 'Document'}
                       </td>
-                      <td className="px-6 py-4 text-gray-600 dark:text-slate-400">{doc.category}</td>
-                      <td className="px-6 py-4 text-gray-600 dark:text-slate-400">v{doc.version}</td>
+                      <td className="px-6 py-4 text-gray-600 dark:text-slate-400">{doc.category || doc.documentType || 'General'}</td>
+                      <td className="px-6 py-4 text-gray-600 dark:text-slate-400">v{doc.version || '1.0'}</td>
                       <td className="px-6 py-4 text-gray-500 dark:text-slate-400">
                         <div className="flex flex-col">
-                          <span>{formatDate(doc.uploadedAt)}</span>
-                          <span className="text-xs">by {doc.uploadedBy}</span>
+                          <span>{doc.uploadedAt ? formatDate(doc.uploadedAt) : (doc.uploadDate ? formatDate(doc.uploadDate) : 'N/A')}</span>
+                          <span className="text-xs">by {doc.uploadedBy || 'System'}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -347,18 +370,67 @@ export default function ContractDetails({ contractId, onBack }: ContractDetailsP
           <div className="max-w-3xl mx-auto bg-white dark:bg-slate-800 p-6 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm">
             <h3 className="text-lg font-bold text-gray-800 dark:text-slate-50 mb-6">Activity History</h3>
             <div className="relative border-l-2 border-gray-200 dark:border-slate-700 ml-3 space-y-8">
-              {contractLogs.map((log, index) => (
-                <div key={log.id} className="relative pl-6">
+              {[...contractLogs, ...corpHistory].sort((a, b) => new Date(b.timestamp || b.created_at || Date.now()).getTime() - new Date(a.timestamp || a.created_at || Date.now()).getTime()).map((log, index) => (
+                <div key={log.id || index} className="relative pl-6">
                   <div className="absolute -left-1.5 top-1.5 w-3 h-3 rounded-full bg-blue-50 dark:bg-blue-900/300 ring-4 ring-white"></div>
                   <div className="flex justify-between items-start mb-1">
                     <h4 className="text-sm font-bold text-gray-900 dark:text-slate-50">{log.action}</h4>
-                    <span className="text-xs text-gray-500 dark:text-slate-400">{formatDateTime(log.timestamp)}</span>
+                    <span className="text-xs text-gray-500 dark:text-slate-400">{formatDateTime(log.timestamp || log.created_at || new Date().toISOString())}</span>
                   </div>
                   <p className="text-sm text-gray-600 dark:text-slate-400">{log.details}</p>
-                  <p className="text-xs text-gray-400 dark:text-slate-400 mt-1">by {log.userName}</p>
+                  <p className="text-xs text-gray-400 dark:text-slate-400 mt-1">by {log.userName || log.performedBy || 'System'}</p>
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* TAB 7: APPROVALS */}
+        {activeTab === 'approvals' && (
+          <div className="max-w-5xl mx-auto bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden p-6">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-slate-50 mb-4">Contract Approvals</h3>
+            {corpApprovals.length === 0 ? (
+              <p className="text-gray-500 dark:text-slate-400 text-center py-6">No approvals found for this contract.</p>
+            ) : (
+              <div className="space-y-4">
+                {corpApprovals.map((app, idx) => (
+                  <div key={idx} className="p-4 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg">
+                    <div className="flex justify-between">
+                      <span className="font-bold text-gray-900 dark:text-slate-50">{app.clauseName || app.name || 'Approval'}</span>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${app.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {app.status || 'Pending'}
+                      </span>
+                    </div>
+                    {app.description && <p className="text-sm text-gray-600 dark:text-slate-400 mt-2">{app.description}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 8: RENEWALS */}
+        {activeTab === 'renewals' && (
+          <div className="max-w-5xl mx-auto bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden p-6">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-slate-50 mb-4">Contract Renewals</h3>
+            {corpRenewals.length === 0 ? (
+              <p className="text-gray-500 dark:text-slate-400 text-center py-6">No renewals found for this contract.</p>
+            ) : (
+              <div className="space-y-4">
+                {corpRenewals.map((ren, idx) => (
+                  <div key={idx} className="p-4 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg">
+                    <div className="flex justify-between">
+                      <span className="font-bold text-gray-900 dark:text-slate-50">Renewal {idx + 1}</span>
+                      <span className="text-sm font-medium text-gray-600 dark:text-slate-400">{ren.renewalDate ? new Date(ren.renewalDate).toLocaleDateString() : 'N/A'}</span>
+                    </div>
+                    {ren.terms && <p className="text-sm text-gray-600 dark:text-slate-400 mt-2">{ren.terms}</p>}
+                    <div className="mt-2 text-sm">
+                       <span className="font-medium">Status:</span> {ren.status || 'N/A'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

@@ -746,6 +746,25 @@ class CorporateContract(Base):
 
     # Relationship
     vehicles = relationship("CorporateContractVehicle", back_populates="contract", cascade="all, delete-orphan")
+    client_details = relationship("CorporateContractClientDetail", back_populates="contract", uselist=False, cascade="all, delete-orphan")
+    documents = relationship("CorporateContractDocument", back_populates="contract", cascade="all, delete-orphan")
+    approvals = relationship("CorporateContractApproval", back_populates="contract", cascade="all, delete-orphan")
+    renewals = relationship("CorporateContractRenewal", back_populates="contract", cascade="all, delete-orphan")
+    history = relationship("CorporateContractHistory", back_populates="contract", cascade="all, delete-orphan")
+
+class CorporateContractClientDetail(Base):
+    __tablename__ = "corporate_contract_client_details"
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    contract_id = Column(Integer, ForeignKey("corporate_contracts.id", ondelete="CASCADE"), index=True, unique=True)
+    companyCode = Column(String(50))
+    gstNumber = Column(String(50))
+    panNumber = Column(String(50))
+    billingAddress = Column(String(500))
+    city = Column(String(100))
+    state = Column(String(100))
+    pincode = Column(String(20))
+    
+    contract = relationship("CorporateContract", back_populates="client_details")
 
 class CorporateContractVehicle(Base):
     __tablename__ = "corporate_contract_vehicles"
@@ -768,3 +787,55 @@ class CorporateContractVehicle(Base):
     remarks = Column(String(500))
     
     contract = relationship("CorporateContract", back_populates="vehicles")
+
+class CorporateContractDocument(Base):
+    __tablename__ = "corporate_contract_documents"
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    contract_id = Column(Integer, ForeignKey("corporate_contracts.id", ondelete="CASCADE"), index=True)
+    document_type = Column(String(100))
+    file_url = Column(String(500))
+    uploaded_by = Column(String(100))
+    created_at = Column(String(50))
+    updated_at = Column(String(50))
+
+    contract = relationship("CorporateContract", back_populates="documents")
+
+class CorporateContractApproval(Base):
+    __tablename__ = "corporate_contract_approvals"
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    contract_id = Column(Integer, ForeignKey("corporate_contracts.id", ondelete="CASCADE"), index=True)
+    step = Column(String(100))
+    status = Column(String(50))
+    approver_id = Column(String(100))
+    comments = Column(String(1000))
+    created_at = Column(String(50))
+    updated_at = Column(String(50))
+
+    contract = relationship("CorporateContract", back_populates="approvals")
+
+class CorporateContractRenewal(Base):
+    __tablename__ = "corporate_contract_renewals"
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    contract_id = Column(Integer, ForeignKey("corporate_contracts.id", ondelete="CASCADE"), index=True)
+    renewal_date = Column(String(50))
+    previous_end_date = Column(String(50))
+    new_end_date = Column(String(50))
+    terms = Column(String(1000))
+    status = Column(String(50))
+    created_at = Column(String(50))
+    updated_at = Column(String(50))
+
+    contract = relationship("CorporateContract", back_populates="renewals")
+
+class CorporateContractHistory(Base):
+    __tablename__ = "corporate_contract_history"
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    contract_id = Column(Integer, ForeignKey("corporate_contracts.id", ondelete="CASCADE"), index=True)
+    modified_by = Column(String(100))
+    action = Column(String(100))
+    previous_state = Column(String(2000))
+    new_state = Column(String(2000))
+    created_at = Column(String(50))
+    updated_at = Column(String(50))
+
+    contract = relationship("CorporateContract", back_populates="history")

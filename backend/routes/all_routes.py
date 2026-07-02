@@ -764,6 +764,22 @@ def _merge_contract_data(db, db_contract):
         for k, v in ren.__dict__.items():
             if k not in ['id', 'contractId', '_sa_instance_state', 'created_at', 'updated_at', 'autoRenewal', 'reminderDays', 'renewalTerms', 'renewalStatus']: data[k] = v
 
+    services = db.query(models.ContractService).filter(models.ContractService.contractId == db_contract.id).all()
+    if services:
+        data['services'] = [{k: v for k, v in s.__dict__.items() if k != '_sa_instance_state'} for s in services]
+        
+    documents = db.query(models.ContractDocument).filter(models.ContractDocument.contractId == db_contract.id).all()
+    if documents:
+        data['documents'] = [{k: v for k, v in d.__dict__.items() if k != '_sa_instance_state'} for d in documents]
+        
+    notes = db.query(models.ContractNote).filter(models.ContractNote.contractId == db_contract.id).all()
+    if notes:
+        data['notes'] = [{k: v for k, v in n.__dict__.items() if k != '_sa_instance_state'} for n in notes]
+        
+    payments = db.query(models.ContractPayment).filter(models.ContractPayment.contractId == db_contract.id).all()
+    if payments:
+        data['payments'] = [{k: v for k, v in p.__dict__.items() if k != '_sa_instance_state'} for p in payments]
+
     return data
 
 
@@ -801,6 +817,36 @@ def get_contracts(
     contracts = query.all()
     return [_merge_contract_data(db, c) for c in contracts]
 
+def _persist_nested_contract_arrays(db, contract_id, data, company_id):
+    from models import all_models as models
+    if 'services' in data and isinstance(data['services'], list):
+        db.query(models.ContractService).filter(models.ContractService.contractId == contract_id).delete()
+        for svc in data['services']:
+            svc_dict = dict(svc)
+            svc_dict.pop('id', None)
+            db.add(models.ContractService(contractId=contract_id, company_id=company_id, **svc_dict))
+            
+    if 'documents' in data and isinstance(data['documents'], list):
+        db.query(models.ContractDocument).filter(models.ContractDocument.contractId == contract_id).delete()
+        for doc in data['documents']:
+            doc_dict = dict(doc)
+            doc_dict.pop('id', None)
+            db.add(models.ContractDocument(contractId=contract_id, company_id=company_id, **doc_dict))
+            
+    if 'notes' in data and isinstance(data['notes'], list):
+        db.query(models.ContractNote).filter(models.ContractNote.contractId == contract_id).delete()
+        for note in data['notes']:
+            note_dict = dict(note)
+            note_dict.pop('id', None)
+            db.add(models.ContractNote(contractId=contract_id, company_id=company_id, **note_dict))
+            
+    if 'payments' in data and isinstance(data['payments'], list):
+        db.query(models.ContractPayment).filter(models.ContractPayment.contractId == contract_id).delete()
+        for payment in data['payments']:
+            payment_dict = dict(payment)
+            payment_dict.pop('id', None)
+            db.add(models.ContractPayment(contractId=contract_id, company_id=company_id, **payment_dict))
+
 @contract_router.post("/", response_model=schemas.ContractResponse)
 def create_contract(contract: schemas.ContractCreate, current_user: models.User = Depends(require_permission("contract_management", "create")), db: Session = Depends(get_db)):
     from fastapi import HTTPException
@@ -829,10 +875,11 @@ def create_contract(contract: schemas.ContractCreate, current_user: models.User 
     core_data['company_id'] = current_user.company_id
     db_item = models.Contract(**core_data)
     db.add(db_item)
+    db.flush()
     
     # 2. Add Buyer Details
     buyer = models.ContractBuyerDetail(
-        contractId=contract.id,
+        contractId=db_item.id,
         organisationType=contract.organisationType, ministry=contract.ministry,
         organisationName=contract.organisationName, buyerName=contract.buyerName,
         buyerDesignation=contract.buyerDesignation, buyerContact=contract.buyerContact,
@@ -843,7 +890,7 @@ def create_contract(contract: schemas.ContractCreate, current_user: models.User 
     db.add(buyer)
     
     client = models.ContractClientDetail(
-        contractId=contract.id,
+        contractId=db_item.id,
         clientName=contract.clientName, clientGstin=contract.clientGstin,
         contactPerson=contract.contactPerson, clientDesignation=contract.clientDesignation,
         email=contract.email, phone=contract.phone, clientState=contract.clientState,
@@ -853,7 +900,7 @@ def create_contract(contract: schemas.ContractCreate, current_user: models.User 
     db.add(client)
     
     fin = models.ContractFinancial(
-        contractId=contract.id,
+        contractId=db_item.id,
         monthlyBaseFare=contract.monthlyBaseFare, gstPercentage=contract.gstPercentage,
         gstAmount=contract.gstAmount, securityDeposit=contract.securityDeposit,
         ePbgPercentage=contract.ePbgPercentage, paymentMode=contract.paymentMode,
@@ -866,7 +913,7 @@ def create_contract(contract: schemas.ContractCreate, current_user: models.User 
     db.add(fin)
     
     consignee = models.ContractConsigneeDetail(
-        contractId=contract.id,
+        contractId=db_item.id,
         consigneeName=contract.consigneeName, consigneeDesignation=contract.consigneeDesignation,
         consigneeContact=contract.consigneeContact, consigneeEmail=contract.consigneeEmail,
         consigneeAddress=contract.consigneeAddress, consigneeState=contract.consigneeState,
@@ -876,7 +923,7 @@ def create_contract(contract: schemas.ContractCreate, current_user: models.User 
     db.add(consignee)
     
     veh = models.ContractVehicleRequirement(
-        contractId=contract.id,
+        contractId=db_item.id,
         vehicleType=contract.vehicleType, vehicleCategory=contract.vehicleCategory,
         carModels=contract.carModels, usageVariant=contract.usageVariant,
         numberOfVehicles=contract.numberOfVehicles, fuelType=contract.fuelType,
@@ -889,7 +936,7 @@ def create_contract(contract: schemas.ContractCreate, current_user: models.User 
     db.add(veh)
     
     sla = models.ContractSlaCompliance(
-        contractId=contract.id,
+        contractId=db_item.id,
         slaDetails=contract.slaDetails, penaltyClause=contract.penaltyClause,
         insuranceRequired=contract.insuranceRequired, driverDocsRequired=contract.driverDocsRequired,
         policeVerification=contract.policeVerification, backgroundVerification=contract.backgroundVerification,
@@ -899,7 +946,7 @@ def create_contract(contract: schemas.ContractCreate, current_user: models.User 
     db.add(sla)
     
     ren = models.ContractRenewalTermination(
-        contractId=contract.id,
+        contractId=db_item.id,
         autoRenewal=contract.autoRenewal, reminderDays=contract.reminderDays,
         renewalTerms=contract.renewalTerms, renewalStatus=contract.renewalStatus,
         terminationNotice=contract.terminationNotice, terminationClause=contract.terminationClause,
@@ -907,11 +954,14 @@ def create_contract(contract: schemas.ContractCreate, current_user: models.User 
     )
     db.add(ren)
     
+    _persist_nested_contract_arrays(db, db_item.id, contract_data, current_user.company_id)
+    
+    db.flush()
     db.commit()
     db.refresh(db_item)
     return _merge_contract_data(db, db_item)
 @contract_router.get("/drafts/all", response_model=list[schemas.ContractDraftResponse])
-def get_drafts(current_user: models.User = Depends(require_permission("contract_management", "view")), db: Session = Depends(get_db)):
+def get_drafts(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     drafts = db.query(models.ContractDraft).filter(models.ContractDraft.company_id == current_user.company_id).all()
     results = []
     for d in drafts:
@@ -934,10 +984,46 @@ def get_drafts(current_user: models.User = Depends(require_permission("contract_
             "createdAt": d.created_at,
             "updatedAt": d.updated_at
         })
+        
+    corp_drafts = db.query(models.CorporateContract).filter(
+        models.CorporateContract.contractStatus == "Draft"
+    ).all()
+    
+    for c in corp_drafts:
+        results.append({
+            "id": c.id,
+            "title": c.contractName or f"Corporate Contract - {c.contractNumber or 'Draft'}",
+            "formData": json.dumps({"is_corporate": True}),
+            "sectionStatus": "{}",
+            "activeSection": "overview",
+            "completionPercentage": 50.0,
+            "attachments": "[]",
+            "createdAt": c.startDate or datetime.now().isoformat(),
+            "updatedAt": c.startDate or datetime.now().isoformat()
+        })
     return results
 
 @contract_router.get("/drafts/{id}", response_model=schemas.ContractDraftResponse)
-def get_draft(id: int, current_user: models.User = Depends(require_permission("contract_management", "view")), db: Session = Depends(get_db)):
+def get_draft(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Check Corporate Drafts
+    corp_draft = db.query(models.CorporateContract).filter(
+        models.CorporateContract.id == id,
+        models.CorporateContract.contractStatus == "Draft"
+    ).first()
+    
+    if corp_draft:
+        return {
+            "id": corp_draft.id,
+            "title": corp_draft.contractName or f"Corporate Contract - {corp_draft.contractNumber or 'Draft'}",
+            "formData": json.dumps({"is_corporate": True}),
+            "sectionStatus": "{}",
+            "activeSection": "overview",
+            "completionPercentage": 50.0,
+            "attachments": "[]",
+            "createdAt": corp_draft.startDate or datetime.now().isoformat(),
+            "updatedAt": corp_draft.startDate or datetime.now().isoformat()
+        }
+        
     d = db.query(models.ContractDraft).filter(models.ContractDraft.draft_id == id, models.ContractDraft.company_id == current_user.company_id).first()
     if not d: raise HTTPException(status_code=404, detail="Draft not found")
     
@@ -1009,16 +1095,22 @@ def _upsert_relational_draft(db, parsed_data, contract_id):
     db.commit()
 
 @contract_router.post("/drafts", response_model=schemas.ContractDraftResponse)
-def create_draft(draft: schemas.ContractDraftCreate, current_user: models.User = Depends(require_permission("contract_management", "create")), db: Session = Depends(get_db)):
+def create_draft(draft: schemas.ContractDraftCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         parsed_data = json.loads(draft.formData)
-        contract_id = draft.id # use draft.id as contract_id for simplicity
         
-        db_item = db.query(models.ContractDraft).filter(models.ContractDraft.draft_id == draft.id).first()
-        if not db_item:
+        # If id is a string like "CNT-123", we must NOT query draft_id with it
+        is_existing = False
+        db_item = None
+        draft_id_val = None
+        if draft.id and isinstance(draft.id, int) or (isinstance(draft.id, str) and draft.id.isdigit()):
+            draft_id_val = int(draft.id)
+            db_item = db.query(models.ContractDraft).filter(models.ContractDraft.draft_id == draft_id_val).first()
+            if db_item:
+                is_existing = True
+        
+        if not is_existing:
             db_item = models.ContractDraft(
-                draft_id=draft.id,
-                contract_id=contract_id,
                 current_section=draft.activeSection,
                 draft_status="Draft",
                 created_by="System",
@@ -1031,6 +1123,9 @@ def create_draft(draft: schemas.ContractDraftCreate, current_user: models.User =
                 company_id=current_user.company_id
             )
             db.add(db_item)
+            db.commit() # Commit to get the new draft_id
+            db.refresh(db_item)
+            draft_id_val = db_item.draft_id
         else:
             db_item.current_section = draft.activeSection
             db_item.updated_at = draft.updatedAt
@@ -1040,15 +1135,13 @@ def create_draft(draft: schemas.ContractDraftCreate, current_user: models.User =
             db_item.attachments = draft.attachments
             
         db.commit()
-        return get_draft(draft.id, current_user, db)
+        return get_draft(draft_id_val, current_user, db)
     except Exception as e:
-        import traceback
-        with open("debug_draft.txt", "w") as f:
-            f.write(traceback.format_exc())
-        raise e
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @contract_router.put("/drafts/{id}", response_model=schemas.ContractDraftResponse)
-def update_draft(id: int, draft: schemas.ContractDraftUpdate, current_user: models.User = Depends(require_permission("contract_management", "update")), db: Session = Depends(get_db)):
+def update_draft(id: int, draft: schemas.ContractDraftUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     # Handled identically to POST because it's a full upsert
     parsed_data = json.loads(draft.formData)
     parsed_data['status'] = 'Draft'  # Drafts must always remain Draft status
@@ -1063,12 +1156,27 @@ def update_draft(id: int, draft: schemas.ContractDraftUpdate, current_user: mode
         db_item.attachments = draft.attachments
         db.commit()
         
-    return get_draft(id, db)
+    return get_draft(id, current_user, db)
 
 @contract_router.delete("/drafts/{id}")
-def delete_draft(id: int, current_user: models.User = Depends(require_permission("contract_management", "delete")), db: Session = Depends(get_db)):
-    db_item = db.query(models.ContractDraft).filter(models.ContractDraft.draft_id == id, models.ContractDraft.company_id == current_user.company_id).first()
-    if not db_item: raise HTTPException(status_code=404, detail="Draft not found")
+def delete_draft(id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Check Corporate Drafts
+    corp_draft = db.query(models.CorporateContract).filter(
+        models.CorporateContract.id == id, 
+        models.CorporateContract.contractStatus == "Draft"
+    ).first()
+    if corp_draft:
+        db.delete(corp_draft)
+        db.commit()
+        return {"message": "Corporate Draft deleted"}
+        
+    # Check Government Drafts
+    db_item = db.query(models.ContractDraft).filter(
+        models.ContractDraft.draft_id == id, 
+        models.ContractDraft.company_id == current_user.company_id
+    ).first()
+    if not db_item: 
+        raise HTTPException(status_code=404, detail="Draft not found")
     
     db.delete(db_item)
     db.commit()
@@ -1237,7 +1345,7 @@ def update_contract(id: int, payload: schemas.ContractUpdate, current_user: mode
     if not db_item: raise HTTPException(status_code=404)
     
     # 9. Verify editing mode duplicate check (exclude self)
-    raw_number = payload.contractNumber or ""
+    raw_number = getattr(payload, 'contractNumber', None) or ""
     if raw_number:
         normalized_number = raw_number.strip().upper()
         existing_contracts = db.query(models.Contract).filter(models.Contract.company_id == current_user.company_id).all()
@@ -1250,6 +1358,9 @@ def update_contract(id: int, payload: schemas.ContractUpdate, current_user: mode
     parsed_data = payload.model_dump(exclude_unset=True)
     _upsert_relational_draft(db, parsed_data, id)
     
+    _persist_nested_contract_arrays(db, id, parsed_data, current_user.company_id)
+    
+    db.commit()
     db_item = db.query(models.Contract).filter(models.Contract.id == id, models.Contract.company_id == current_user.company_id).first()
     return _merge_contract_data(db, db_item)
 
