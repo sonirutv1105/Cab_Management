@@ -24,7 +24,10 @@ import ComplianceDocumentsView from './components/ComplianceDocumentsView';
 import AuditSettingsView from './components/AuditSettingsView';
 import ContractManagementView from './components/ContractManagementView';
 import SupportTicketsView from './components/SupportTicketsView';
+import IntegrationManagementView from './components/IntegrationManagementView';
 import LoginPage from './components/LoginPage';
+import ForgotPasswordPage from './components/ForgotPasswordPage';
+import ResetPasswordPage from './components/ResetPasswordPage';
 import SuperAdminLayout from './components/SuperAdminLayout';
 import { ContractProvider } from './context/ContractContext';
 import { Toaster } from 'react-hot-toast';
@@ -52,6 +55,7 @@ function AppContent() {
       'Audit Logs': 'audit_logs',
       'User Management': 'user_roles',
       'Support Tickets': 'support_tickets',
+      'Integration Management': 'company_settings',
       'Settings': 'company_settings'
     };
 
@@ -103,6 +107,8 @@ function AppContent() {
         return <SupportTicketsView />;
       case 'Contract Management':
         return <ContractManagementView />;
+      case 'Integration Management':
+        return <IntegrationManagementView />;
       case 'Settings':
         return <AuditSettingsView subModule="settings" />;
       default:
@@ -138,10 +144,15 @@ function AppWrapper() {
   if (window.location.pathname.startsWith('/super-admin')) {
     return <SuperAdminLayout />;
   }
-  // DEMO BYPASS: Remove authentication check
-  // if (!isAuthenticated) {
-  //   return <LoginPage />;
-  // }
+  if (!isAuthenticated) {
+    if (window.location.pathname === '/forgot-password') {
+      return <ForgotPasswordPage />;
+    }
+    if (window.location.pathname === '/reset-password') {
+      return <ResetPasswordPage />;
+    }
+    return <LoginPage />;
+  }
   return <AppContent />;
 }
 

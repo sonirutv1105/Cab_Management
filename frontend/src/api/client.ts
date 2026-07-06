@@ -9,7 +9,7 @@ import {
 
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
-const apiClient = axios.create({
+export const apiClient = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
@@ -67,6 +67,9 @@ export const api = {
 
   // ─── Auth ───
   login: (email: string, password: string) => apiClient.post('/auth/login', { email, password }).then(res => res.data),
+  forgotPassword: (email: string) => apiClient.post('/auth/forgot-password', { email }).then(res => res.data),
+  verifyOTP: (email: string, otp: string) => apiClient.post('/auth/verify-otp', { email, otp }).then(res => res.data),
+  resetPassword: (token: string, new_password: string) => apiClient.post('/auth/reset-password', { token, new_password }).then(res => res.data),
   getCurrentUser: () => apiClient.get<User>('/auth/me').then(res => res.data),
 
   // ─── Users ───
@@ -95,6 +98,7 @@ export const api = {
 
   // ─── Vehicles ───
   getVehicles: () => apiClient.get<Vehicle[]>('/vehicles/').then(res => res.data),
+  getVendorVehicles: (vendorId: number | string, params?: any) => apiClient.get(`/vehicles/vendor/${vendorId}`, { params }).then(res => res.data),
   getVehicle: (id: number | string) => apiClient.get<Vehicle>(`/vehicles/${id}`).then(res => res.data),
   createVehicle: (vehicle: Partial<Vehicle>) => apiClient.post<Vehicle>('/vehicles/', vehicle).then(res => res.data),
   updateVehicle: (id: number | string, vehicle: Partial<Vehicle>) => apiClient.put<Vehicle>(`/vehicles/${id}`, vehicle).then(res => res.data),
@@ -277,6 +281,8 @@ export const api = {
   
   getCompanyNotifications: () => apiClient.get<any[]>('/company/notifications').then(res => res.data),
   readCompanyNotification: (id: number) => apiClient.patch<any>(`/company/notifications/${id}/read`).then(res => res.data),
+  markAllNotificationsRead: () => apiClient.post<any>('/notifications/mark-all-read').then(res => res.data),
+  clearAllNotifications: () => apiClient.delete<any>('/notifications/clear-all').then(res => res.data),
   getCompanyAnnouncements: () => apiClient.get<any[]>('/company/announcements').then(res => res.data),
 
   // ─── Export ───

@@ -180,7 +180,7 @@ export default function DashboardView() {
 
         <div className="relative z-10 flex items-center h-full">
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Welcome, Pulpit
+            Welcome, {currentUser?.companyName || 'CAB SYSTEM'}
           </h1>
         </div>
 

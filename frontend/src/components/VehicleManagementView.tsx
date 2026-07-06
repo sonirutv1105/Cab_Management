@@ -83,12 +83,12 @@ export default function VehicleManagementView() {
     seatingCapacity: 5,
     fuelType: 'Petrol',
     status: 'Available',
-    vendorId: vendors[0]?.id || 'vnd_1',
     insuranceExpiry: '',
     lastServiceDate: '',
     year: new Date().getFullYear(),
     color: '',
     vehicleType: 'Sedan',
+    vendorId: '' as any,
     contract: '',
     assignedDriverId: ''
   });
@@ -282,8 +282,8 @@ export default function VehicleManagementView() {
     setModalOpen(false);
     setEditingVh(null);
     setFormState({
-      plateNumber: '', model: '', make: '', seatingCapacity: 5, fuelType: 'Petrol', status: 'Available',
-      vendorId: vendors[0]?.id || 'vnd_1', insuranceExpiry: '', lastServiceDate: '',
+      plateNumber: '', model: '', make: '', seatingCapacity: 4, fuelType: 'Petrol', status: 'Available',
+      insuranceExpiry: '', lastServiceDate: '',
       year: new Date().getFullYear(), color: '', vehicleType: 'Sedan', contract: '', assignedDriverId: ''
     });
   };
@@ -292,7 +292,7 @@ export default function VehicleManagementView() {
     setEditingVh(v);
     setFormState({
       plateNumber: v.plateNumber, model: v.model, make: v.make, seatingCapacity: v.seatingCapacity,
-      fuelType: v.fuelType, status: v.status, vendorId: v.vendorId, insuranceExpiry: v.insuranceExpiry,
+      fuelType: v.fuelType, status: v.status, insuranceExpiry: v.insuranceExpiry,
       lastServiceDate: v.lastServiceDate, year: v.year, color: v.color, vehicleType: v.vehicleType,
       contract: v.contract, assignedDriverId: v.assignedDriverId
     });
@@ -853,10 +853,11 @@ export default function VehicleManagementView() {
                     placeholder="e.g. TCS Agreement" />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">Cab Vendor / Owner</label>
-                  <select value={formState.vendorId} onChange={(e) => setFormState({ ...formState, vendorId: e.target.value })}
-                    className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg p-2.5 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-blue-500">
-                    {vendors.map((vnd) => <option key={vnd.id} value={vnd.id}>{vnd.name}</option>)}
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">Vendor (Required)</label>
+                  <select value={formState.vendorId || ''} onChange={(e) => setFormState({ ...formState, vendorId: parseInt(e.target.value) || undefined })}
+                    className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg p-2.5 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-blue-500" required>
+                    <option value="">Select Vendor</option>
+                    {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
                   </select>
                 </div>
               </div>

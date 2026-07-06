@@ -4,6 +4,7 @@ import { CorporateContractVehicle } from '../../types';
 import { api } from '../../api/client';
 import { INDIAN_STATES } from '../../utils/indianStates';
 import { useContracts } from '../../context/ContractContext';
+import toast from 'react-hot-toast';
 
 const SECTION_FIELDS: Record<string, { required: string[], optional: string[] }> = {
   'A': { required: ['contractName'], optional: ['priority', 'description'] },
@@ -216,7 +217,7 @@ const MOCK_RATE_CARDS: any = {
 
 interface CorporateContractFormProps {
   onBack: () => void;
-  onSuccess: (id: string) => void;
+  onSuccess: (id: string, isDraft?: boolean) => void;
 }
 
 export default function CorporateContractForm({ onBack, onSuccess, resumeId }: CorporateContractFormProps & { resumeId?: string }) {
@@ -277,26 +278,51 @@ export default function CorporateContractForm({ onBack, onSuccess, resumeId }: C
 
   useEffect(() => {
     if (editId) {
+      const draft = drafts.find((d: any) => d.id.toString() === editId.toString());
+      if (draft) {
+        try {
+          const parsedFormData = JSON.parse(draft.formData);
+          if (Object.keys(parsedFormData).length > 2) {
+            let loadedVehicles = parsedFormData.vehicles || [{ ...INITIAL_VEHICLE }];
+            if (loadedVehicles.length === 1 && loadedVehicles[0].vehicleCategory && loadedVehicles[0].vehicleCategory.includes(',')) {
+              loadedVehicles = loadedVehicles[0].vehicleCategory.split(',').map((s: string) => s.trim()).filter(Boolean).map((cat: string) => ({ ...loadedVehicles[0], vehicleCategory: cat }));
+            }
+            setFormData((prev: any) => ({ ...prev, ...parsedFormData, vehicles: loadedVehicles }));
+            if (draft.activeSection) setCurrentStep(draft.activeSection);
+            return;
+          }
+        } catch (e) {
+          console.error("Failed to parse draft form data", e);
+        }
+      }
+
       api.getCorporateContract(editId).then(data => {
-        setFormData((prev: any) => ({
-          ...prev,
-          ...data,
-          companyName: data.company || '',
-          branchName: data.branch || '',
-          contactPerson: data.clientContactPerson || '',
-          contactNumber: data.clientMobile || '',
-          emailAddress: data.clientEmail || '',
-          gstPercent: data.gst || '',
-          tdsPercent: data.tds || '',
-          companyCode: data.client_details?.companyCode || '',
-          gstNumber: data.client_details?.gstNumber || '',
-          panNumber: data.client_details?.panNumber || '',
-          billingAddress: data.client_details?.billingAddress || '',
-          city: data.client_details?.city || '',
-          state: data.client_details?.state || '',
-          pincode: data.client_details?.pincode || '',
-          vehicles: data.vehicles?.length ? data.vehicles : [{ ...INITIAL_VEHICLE }]
-        }));
+        setFormData((prev: any) => {
+          let loadedVehicles = data.vehicles?.length ? data.vehicles : [{ ...INITIAL_VEHICLE }];
+          if (loadedVehicles.length === 1 && loadedVehicles[0].vehicleCategory && loadedVehicles[0].vehicleCategory.includes(',')) {
+            loadedVehicles = loadedVehicles[0].vehicleCategory.split(',').map((s: string) => s.trim()).filter(Boolean).map((cat: string) => ({ ...loadedVehicles[0], vehicleCategory: cat }));
+          }
+          
+          return {
+            ...prev,
+            ...data,
+            companyName: data.company || '',
+            branchName: data.branch || '',
+            contactPerson: data.clientContactPerson || '',
+            contactNumber: data.clientMobile || '',
+            emailAddress: data.clientEmail || '',
+            gstPercent: data.gst || '',
+            tdsPercent: data.tds || '',
+            companyCode: data.client_details?.companyCode || '',
+            gstNumber: data.client_details?.gstNumber || '',
+            panNumber: data.client_details?.panNumber || '',
+            billingAddress: data.client_details?.billingAddress || '',
+            city: data.client_details?.city || '',
+            state: data.client_details?.state || '',
+            pincode: data.client_details?.pincode || '',
+            vehicles: loadedVehicles
+          };
+        });
       }).catch(err => console.error("Error loading draft", err));
     }
   }, [editId]);
@@ -404,6 +430,20 @@ export default function CorporateContractForm({ onBack, onSuccess, resumeId }: C
         isValid = false;
       }
     });
+    
+    if (stepId === 'E') {
+      const activeVehicles = formData.vehicles.filter((v: any) => v.vehicleCategory);
+      if (activeVehicles.length === 0) {
+        // Optional: Ensure at least one vehicle is selected if it's required? 
+        // The requirements don't explicitly state at least one is required, but typically yes.
+      } else {
+        activeVehicles.forEach((v: any) => {
+          if (!v.quantity || v.quantity <= 0) isValid = false;
+          if (!v.monthlyKmIncluded || v.monthlyKmIncluded <= 0) isValid = false;
+          if (!v.minimumBillingHours || v.minimumBillingHours <= 0) isValid = false;
+        });
+      }
+    }
 
     setErrors(prev => {
       const nextErrors = { ...prev };
@@ -438,6 +478,7 @@ export default function CorporateContractForm({ onBack, onSuccess, resumeId }: C
   const [internalContractId, setInternalContractId] = useState<string>(resumeId || `CORP-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`);
 
   const handleSubmit = async (isDraft = false) => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
     try {
       const payload = {
@@ -473,24 +514,28 @@ export default function CorporateContractForm({ onBack, onSuccess, resumeId }: C
           completionPercentage: 50.0,
           attachments: "[]"
         };
-        await saveDraft(draftData as any);
-        alert("Draft saved successfully.");
+        const savedDraft = await saveDraft(draftData as any);
+        if (savedDraft) {
+          setInternalContractId(savedDraft.id.toString());
+        }
+        toast.success("Draft saved successfully.");
         
         // Update URL to use internalContractId
         const url = new URL(window.location.href);
         url.searchParams.set('resume', internalContractId);
         url.searchParams.set('type', 'corp');
         window.history.replaceState({}, '', url.toString());
+        onSuccess(internalContractId, true);
         return;
       }
 
       if (editId && !editId.toString().startsWith('CORP-')) {
         await api.updateCorporateContract(editId, payload);
-        alert("Corporate Contract updated successfully!");
+        toast.success("Corporate Contract updated successfully!");
         onSuccess(editId);
       } else {
         const response = await api.createCorporateContract(payload);
-        alert("Corporate Contract created successfully!");
+        toast.success("Corporate Contract created successfully!");
         if (response && response.id) {
           onSuccess(String(response.id));
         } else {
@@ -499,25 +544,24 @@ export default function CorporateContractForm({ onBack, onSuccess, resumeId }: C
       }
     } catch (error) {
       console.error("Failed to save corporate contract:", error);
-      alert("Failed to save Corporate Contract. Please check the form data.");
+      toast.error("Failed to save Corporate Contract. Please check the form data.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
 
-  const updateVehicle = (field: string, value: any) => {
+  const updateVehicle = (index: number, field: string, value: any) => {
     const newV = [...formData.vehicles];
-    newV[0][field] = value;
+    newV[index][field] = value;
     
-    // Auto populate rate card based on first category selected if applicable
+    // Auto populate rate card based on vehicle category if applicable
     if (field === 'vehicleCategory') {
-       const cats = value.split(',').filter(Boolean);
-       const firstCat = cats[0];
-       if (firstCat && rateCards && rateCards[firstCat]) {
-         newV[0].extraKmCharge = rateCards[firstCat].base;
-         newV[0].nightCharges = rateCards[firstCat].night;
-         newV[0].driverAllowance = rateCards[firstCat].driver;
+       const cat = value;
+       if (cat && rateCards && rateCards[cat]) {
+         newV[index].extraKmCharge = rateCards[cat].base;
+         newV[index].nightCharges = rateCards[cat].night;
+         newV[index].driverAllowance = rateCards[cat].driver;
        }
     }
     
@@ -525,17 +569,31 @@ export default function CorporateContractForm({ onBack, onSuccess, resumeId }: C
   };
   
   const handleVehicleCategoryToggle = (category: string) => {
-    const currentCategories = formData.vehicles[0].vehicleCategory 
-      ? formData.vehicles[0].vehicleCategory.split(',').map((s: string) => s.trim()).filter(Boolean)
-      : [];
-      
-    let newCategories;
-    if (currentCategories.includes(category)) {
-      newCategories = currentCategories.filter((c: string) => c !== category);
+    const existingIndex = formData.vehicles.findIndex((v: any) => v.vehicleCategory === category);
+    let newV = [...formData.vehicles];
+    
+    if (existingIndex >= 0) {
+      newV.splice(existingIndex, 1);
     } else {
-      newCategories = [...currentCategories, category];
+      const newVehicle = { ...INITIAL_VEHICLE, vehicleCategory: category };
+      if (rateCards && rateCards[category]) {
+        newVehicle.extraKmCharge = rateCards[category].base;
+        newVehicle.nightCharges = rateCards[category].night;
+        newVehicle.driverAllowance = rateCards[category].driver;
+      }
+      
+      if (newV.length === 1 && !newV[0].vehicleCategory) {
+        newV = [newVehicle];
+      } else {
+        newV.push(newVehicle);
+      }
     }
-    updateVehicle('vehicleCategory', newCategories.join(', '));
+    
+    if (newV.length === 0) {
+      newV = [{ ...INITIAL_VEHICLE }];
+    }
+    
+    setFormData((prev: any) => ({ ...prev, vehicles: newV }));
   };
 
   return (
@@ -685,42 +743,56 @@ export default function CorporateContractForm({ onBack, onSuccess, resumeId }: C
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold text-gray-900">Vehicle Config</h3>
                   </div>
-                  <div className="overflow-x-auto border border-gray-200 rounded-xl">
-                    <table className="w-full text-sm text-left whitespace-nowrap">
-                      <thead className="bg-gray-50 text-gray-700 border-b border-gray-200">
-                        <tr>
-                          <th className="px-4 py-3 font-semibold">Vehicle Category</th>
-                          <th className="px-4 py-3 font-semibold">Quantity</th>
-                          <th className="px-4 py-3 font-semibold">Monthly KM</th>
-                          <th className="px-4 py-3 font-semibold">Min Hours</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {formData.vehicles.slice(0, 1).map((v: any, i: number) => (
-                          <tr key={i} className="hover:bg-gray-50">
-                            <td className="px-4 py-2">
-                              <div className="flex flex-col gap-1">
-                                {['Sedan', 'SUV', 'Innova'].map(cat => (
-                                  <label key={cat} className="inline-flex items-center">
-                                    <input
-                                      type="checkbox"
-                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                      checked={(v.vehicleCategory || '').split(',').map((s: string) => s.trim()).includes(cat)}
-                                      onChange={() => handleVehicleCategoryToggle(cat)}
-                                    />
-                                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">{cat}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            </td>
-                            <td className="px-4 py-2"><input type="number" className="w-20 bg-white border border-gray-300 rounded-md p-1.5" value={v.quantity} onChange={(e) => updateVehicle('quantity', Number(e.target.value))}/></td>
-                            <td className="px-4 py-2"><input type="number" className="w-24 bg-white border border-gray-300 rounded-md p-1.5" value={v.monthlyKmIncluded} onChange={(e) => updateVehicle('monthlyKmIncluded', Number(e.target.value))}/></td>
-                            <td className="px-4 py-2"><input type="number" className="w-24 bg-white border border-gray-300 rounded-md p-1.5" value={v.minimumBillingHours} onChange={(e) => updateVehicle('minimumBillingHours', Number(e.target.value))}/></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Vehicle Categories</label>
+                    <div className="flex flex-wrap gap-4">
+                      {['Sedan', 'SUV', 'Innova', 'Hatchback', 'Bus', 'Tempo Traveller'].map(cat => (
+                        <label key={cat} className="inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            checked={formData.vehicles.some((v: any) => v.vehicleCategory === cat)}
+                            onChange={() => handleVehicleCategoryToggle(cat)}
+                          />
+                          <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">{cat}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
+                  
+                  {formData.vehicles.filter((v: any) => v.vehicleCategory).length > 0 && (
+                    <div className="overflow-x-auto border border-gray-200 rounded-xl">
+                      <table className="w-full text-sm text-left whitespace-nowrap">
+                        <thead className="bg-gray-50 text-gray-700 border-b border-gray-200">
+                          <tr>
+                            <th className="px-4 py-3 font-semibold">Vehicle Category</th>
+                            <th className="px-4 py-3 font-semibold">Quantity</th>
+                            <th className="px-4 py-3 font-semibold">Monthly KM</th>
+                            <th className="px-4 py-3 font-semibold">Min Hours</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {formData.vehicles.map((v: any, index: number) => {
+                            if (!v.vehicleCategory) return null;
+                            return (
+                              <tr key={index} className="hover:bg-gray-50">
+                                <td className="px-4 py-2 font-medium text-gray-900">{v.vehicleCategory}</td>
+                                <td className="px-4 py-2">
+                                  <input type="number" className="w-20 bg-white border border-gray-300 rounded-md p-1.5" value={v.quantity || ''} onChange={(e) => updateVehicle(index, 'quantity', Number(e.target.value))}/>
+                                </td>
+                                <td className="px-4 py-2">
+                                  <input type="number" className="w-24 bg-white border border-gray-300 rounded-md p-1.5" value={v.monthlyKmIncluded || ''} onChange={(e) => updateVehicle(index, 'monthlyKmIncluded', Number(e.target.value))}/>
+                                </td>
+                                <td className="px-4 py-2">
+                                  <input type="number" className="w-24 bg-white border border-gray-300 rounded-md p-1.5" value={v.minimumBillingHours || ''} onChange={(e) => updateVehicle(index, 'minimumBillingHours', Number(e.target.value))}/>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </WizardStep>
 

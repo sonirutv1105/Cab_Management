@@ -31,7 +31,7 @@ interface ContractContextType {
   duplicateContract: (id: string) => Promise<void>;
   changeContractStatus: (id: string, newStatus: Contract['status']) => void;
   
-  saveDraft: (draft: ContractDraft) => Promise<void>;
+  saveDraft: (draft: ContractDraft | any) => Promise<any>;
   deleteDraft: (id: string) => Promise<void>;
 
   addNote: (note: Omit<ContractNote, 'id' | 'createdAt'>) => void;
@@ -216,13 +216,13 @@ export const ContractProvider: React.FC<{ children: ReactNode }> = ({ children }
     console.log('saveDraft called');
     console.trace();
     try {
-      const existing = drafts.find(d => d.id === draft.id);
+      const existing = drafts.find(d => d.id.toString() === draft.id.toString());
       let savedDraft;
       if (existing) {
         console.log('[Draft Save] Updating existing draft:', draft.id);
         savedDraft = await api.updateContractDraft(draft.id, draft);
         console.log('[Draft Save] Updated draft response:', savedDraft);
-        setDrafts(prev => prev.map(d => d.id === draft.id ? savedDraft : d));
+        setDrafts(prev => prev.map(d => d.id.toString() === draft.id.toString() ? savedDraft : d));
       } else {
         console.log('[Draft Save] Creating new draft:', draft.id);
         savedDraft = await api.createContractDraft(draft);
@@ -230,6 +230,7 @@ export const ContractProvider: React.FC<{ children: ReactNode }> = ({ children }
         setDrafts(prev => [savedDraft, ...prev]);
       }
       console.log('[Draft Save] Draft Count Rendered:', drafts.length + (existing ? 0 : 1));
+      return savedDraft;
     } catch (err) {
       console.error('[Draft Save] Failed to save draft', err);
       throw err;
@@ -239,9 +240,10 @@ export const ContractProvider: React.FC<{ children: ReactNode }> = ({ children }
   const deleteDraft = async (id: string) => {
     try {
       await api.deleteContractDraft(id);
-      setDrafts(prev => prev.filter(d => d.id !== id));
-    } catch (err) {
+      setDrafts(prev => prev.filter(d => d.id.toString() !== id.toString()));
+    } catch (err: any) {
       console.error('Failed to delete draft', err);
+      throw new Error(err.response?.data?.detail || err.message || 'Failed to delete draft.');
     }
   };
 

@@ -15,6 +15,8 @@ class SuperAdmin(Base):
     hashed_password = Column(String(255))
     role = Column(String(50), default="super_admin")
     created_at = Column(String(50))
+    reset_token = Column(String(255), nullable=True, index=True)
+    reset_token_expiry = Column(String(50), nullable=True)
 
 class Company(Base):
     __tablename__ = "companies"
@@ -74,6 +76,20 @@ class User(Base):
     hashed_password = Column(String(255), nullable=True)
     status = Column(String(50), default="Active")
     created_at = Column(String(50), nullable=True)
+    reset_token = Column(String(255), nullable=True, index=True)
+    reset_token_expiry = Column(String(50), nullable=True)
+
+class PasswordResetOTP(Base):
+    __tablename__ = "password_reset_otps"
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    email = Column(String(100), index=True)
+    otp = Column(String(6))
+    created_at = Column(DateTime)
+    expires_at = Column(DateTime)
+    is_used = Column(Boolean, default=False)
+    failed_attempts = Column(Integer, default=0)
+    is_verified = Column(Boolean, default=False)
+    verified_session_token = Column(String(255), nullable=True, index=True)
 
 class Driver(Base):
     __tablename__ = "drivers"
@@ -216,16 +232,75 @@ class Vendor(Base):
     company_id = Column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), index=True, nullable=True)
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
     name = Column(String(100))
+    vendorCode = Column(String(50), nullable=True)
+    vendorType = Column(String(100), nullable=True)
+    businessCategory = Column(String(100), nullable=True)
+    panNumber = Column(String(50), nullable=True)
     contactName = Column(String(100))
+    designation = Column(String(100), nullable=True)
     phone = Column(String(20))
+    altPhone = Column(String(20), nullable=True)
     email = Column(String(100))
+    address = Column(String(255), nullable=True)
+    city = Column(String(100), nullable=True)
+    state = Column(String(100), nullable=True)
+    country = Column(String(100), nullable=True)
+    pinCode = Column(String(20), nullable=True)
+    website = Column(String(255), nullable=True)
+    gstNumber = Column(String(50), nullable=True)
     fleetSize = Column(Integer, nullable=False)
+    vehicleTypes = Column(String(255), nullable=True)
+    totalDrivers = Column(Integer, nullable=True)
+    operatingCities = Column(String(255), nullable=True)
+    serviceAvailability = Column(String(100), nullable=True)
     rating = Column(Float, default=5.0)
     slaCompliance = Column(Float, default=100.0)
+    complianceRating = Column(Float, nullable=True)
+    responseTime = Column(String(50), nullable=True)
     status = Column(String(50), default="Active")
+    docGst = Column(String(255), nullable=True)
+    docPan = Column(String(255), nullable=True)
+    docRegistration = Column(String(255), nullable=True)
+    docInsurance = Column(String(255), nullable=True)
+    docAgreement = Column(String(255), nullable=True)
+    docOther = Column(String(255), nullable=True)
+    bankName = Column(String(100), nullable=True)
+    accountHolder = Column(String(100), nullable=True)
+    accountNumber = Column(String(100), nullable=True)
+    ifscCode = Column(String(50), nullable=True)
+    branchName = Column(String(100), nullable=True)
+    upiId = Column(String(100), nullable=True)
+
+class Integration(Base):
+    __tablename__ = "integrations"
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    company_id = Column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), index=True)
+    name = Column(String(150))
+    api_key = Column(String(255), unique=True, index=True)
+    api_secret = Column(String(255))
+    webhook_secret = Column(String(255), nullable=True)
+    is_active = Column(Boolean, default=True)
+    rate_limit = Column(Integer, default=1000)
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
+
+class ApiLog(Base):
+    __tablename__ = "api_logs"
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    company_id = Column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), index=True)
+    integration_id = Column(Integer, ForeignKey('integrations.id', ondelete='CASCADE'), index=True, nullable=True)
+    endpoint = Column(String(255))
+    ip_address = Column(String(50))
+    method = Column(String(10))
+    status_code = Column(Integer)
+    response = Column(Text, nullable=True)
+    processing_time = Column(Float)
+    validation_errors = Column(Text, nullable=True)
+    created_at = Column(DateTime)
 
 class Booking(Base):
     __tablename__ = "bookings"
+    __table_args__ = (UniqueConstraint('company_id', 'external_booking_id', name='uq_booking_company_external_id'),)
     company_id = Column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), index=True, nullable=True)
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
     passengerName = Column(String(100))
@@ -237,6 +312,12 @@ class Booking(Base):
     managerApproval = Column(String(50), default="Pending")
     hrStatus = Column(String(50), default="Pending")
     tripId = Column(Integer, ForeignKey('trips.id', ondelete='SET NULL'), nullable=True)
+    booking_source = Column(String(50), default="Manual")
+    external_booking_id = Column(String(100), nullable=True, index=True)
+    integration_id = Column(Integer, ForeignKey('integrations.id', ondelete='SET NULL'), nullable=True)
+    api_received_at = Column(DateTime, nullable=True)
+    sync_status = Column(String(50), default="Synced")
+    raw_payload = Column(Text, nullable=True)
 
 class FuelLog(Base):
     __tablename__ = "fuel_logs"
@@ -284,6 +365,7 @@ class AppNotification(Base):
     timestamp = Column(String(50))
     read = Column(Boolean, default=False)
     targetRole = Column(String(50), nullable=True)
+    popup_dismissed = Column(Boolean, default=False)
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
@@ -440,6 +522,7 @@ class ContractDraft(Base):
     sectionStatus = Column(Text)
     completionPercentage = Column(Float, default=0.0)
     attachments = Column(Text, nullable=True)
+    formData = Column(Text, nullable=True)
 
 class ContractBuyerDetail(Base):
     __tablename__ = "contract_buyer_details"

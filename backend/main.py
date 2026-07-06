@@ -18,6 +18,8 @@ from routes.all_routes import (
     upload_router, document_router, export_router, dashboard_router, user_router, support_router
 )
 from routes.super_admin import super_admin_router
+from routes.integrations import integrations_router
+from routes.api_v1_bookings import api_v1_bookings_router
 
 
 from fastapi.staticfiles import StaticFiles
@@ -60,6 +62,8 @@ app.add_middleware(
 
 # Mount modular routers
 app.include_router(auth_router)
+app.include_router(integrations_router)
+app.include_router(api_v1_bookings_router)
 app.include_router(vehicle_router)
 app.include_router(driver_router)
 app.include_router(driver_draft_router)

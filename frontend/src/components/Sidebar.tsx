@@ -31,7 +31,8 @@ import {
   Search,
   Menu,
   X,
-  HelpCircle
+  HelpCircle,
+  Link
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -95,6 +96,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed }: Side
         return <Settings className="w-5 h-5" />;
       case 'Support Tickets':
         return <HelpCircle className="w-5 h-5" />;
+      case 'Integration Management':
+        return <Link className="w-5 h-5" />;
       default:
         return <Settings className="w-5 h-5" />;
     }
@@ -118,6 +121,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed }: Side
     'Audit Logs',
     'User Management',
     'Support Tickets',
+    'Integration Management',
     'Settings'
   ];
 
@@ -137,6 +141,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed }: Side
     'Notifications': 'notifications',
     'Audit Logs': 'audit_logs',
     'User Management': 'user_roles',
+    'Integration Management': 'company_settings',
     'Support Tickets': 'support_tickets',
     'Settings': 'company_settings'
   };
@@ -172,7 +177,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed }: Side
           <div className={`leading-tight transition-all duration-300 ease-in-out origin-left overflow-hidden ${isCollapsed ? 'max-w-0 opacity-0 -translate-x-4 ml-0' : 'max-w-[200px] opacity-100 translate-x-0 ml-3'}`}>
             <span className={`font-extrabold tracking-tight text-base block uppercase ${
               isDark ? 'text-white' : 'text-gray-900'
-            }`}>Pulpit Cab</span>
+            }`}>{currentUser?.companyName || 'CAB SYSTEM'}</span>
           </div>
         </div>
       </div>

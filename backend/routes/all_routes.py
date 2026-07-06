@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, func
 from typing import Optional
 from datetime import datetime
 import os
@@ -109,6 +110,16 @@ def validate_vendor_for_driver(db, company_id, vendor_id, vehicle_assignment_typ
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    if os.getenv("DEMO_MODE") == "true" and token == "demo-token":
+        demo_user = db.query(models.User).filter(models.User.role == "COMPANY_HEAD").first()
+        if demo_user:
+            demo_user.is_demo = True
+            return demo_user
+        # Fallback to an in-memory mock user if the DB is completely empty
+        fallback_user = models.User(id=1, name="Demo Admin", email="demo@example.com", role="COMPANY_HEAD", company_id=1)
+        fallback_user.is_demo = True
+        return fallback_user
+
     credentials_exception = HTTPException(
         status_code=401,
         detail="Could not validate credentials",
@@ -129,6 +140,16 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 def get_user_permissions(db: Session, user: models.User):
+    if os.getenv("DEMO_MODE") == "true" and getattr(user, "is_demo", False):
+        modules = [
+            "dashboard", "driver_management", "vehicle_management", "trip_management",
+            "vendor_management", "booking_management", "live_tracking", "fuel_management",
+            "maintenance_management", "compliance_management", "contract_management",
+            "reports_analytics", "notifications", "audit_logs", "user_roles",
+            "support_tickets", "company_settings"
+        ]
+        return [{"module": m, "action": a} for m in modules for a in ["view", "create", "update", "delete"]]
+
     if not user.company_id:
         return []
     role = db.query(models.Role).filter(models.Role.company_id == user.company_id, models.Role.name == user.role).first()
@@ -147,7 +168,12 @@ def require_permission(module: str, action: str):
     return dependency
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+import secrets
+import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 def log_auth_event(db: Session, request: Request, email: str, role: str, action: str, status: str, user_name: str = "Unknown", company_name: str = "Unknown", company_id: int = None):
     client_ip = request.client.host if request.client else "Unknown IP"
@@ -238,6 +264,122 @@ def logout(request: Request, db: Session = Depends(get_db), current_user: models
     log_auth_event(db, request, current_user.email, current_user.role, "User Logout", "Success", current_user.name, company_name, current_user.company_id)
     return {"message": "Logged out successfully"}
 
+@auth_router.post("/forgot-password")
+def forgot_password(req: schemas.ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)):
+    # 1. Rate limiting could be implemented here
+    # 2. Check if user exists (also check super_admins just in case, though requirement may imply regular users)
+    user = db.query(models.User).filter(models.User.email == req.email).first()
+    is_super = False
+    if not user:
+        user = db.query(models.SuperAdmin).filter(models.SuperAdmin.email == req.email).first()
+        is_super = True
+
+    generic_response = {"message": "If an account with that email exists, an OTP has been sent."}
+
+    if not user:
+        return generic_response
+
+    # Generate secure 6-digit numeric OTP
+    otp = "".join([str(secrets.randbelow(10)) for _ in range(6)])
+    created_at = datetime.now()
+    expires_at = created_at + timedelta(minutes=5)
+
+    # Save to DB
+    new_otp = models.PasswordResetOTP(email=req.email, otp=otp, created_at=created_at, expires_at=expires_at)
+    db.add(new_otp)
+    db.commit()
+
+    # 5. SMTP Configuration Check
+    required_env_vars = ['SMTP_SERVER', 'SMTP_PORT', 'SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_FROM_EMAIL']
+    missing_vars = [var for var in required_env_vars if not os.environ.get(var)]
+    
+    if missing_vars:
+        error_msg = f"SMTP configuration is missing required environment variables: {', '.join(missing_vars)}"
+        print(f"ERROR: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
+
+    # 6. Send actual email
+    try:
+        smtp_server = os.environ.get('SMTP_SERVER')
+        smtp_port = int(os.environ.get('SMTP_PORT', 587))
+        smtp_username = os.environ.get('SMTP_USERNAME')
+        smtp_password = os.environ.get('SMTP_PASSWORD')
+        smtp_from = os.environ.get('SMTP_FROM_EMAIL')
+
+        msg = MIMEMultipart()
+        msg['From'] = smtp_from
+        msg['To'] = req.email
+        msg['Subject'] = "Password Reset Request"
+
+        body = f"Your password reset OTP is: {otp}\nThis OTP is valid for 5 minutes."
+        msg.attach(MIMEText(body, 'plain'))
+
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(smtp_username, smtp_password)
+        server.send_message(msg)
+        server.quit()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        error_msg = f"Failed to send email. Exception: {repr(e)}\nTraceback: {traceback.format_exc()}"
+        print(f"ERROR: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
+    
+    return generic_response
+
+@auth_router.post("/verify-otp")
+def verify_otp(req: schemas.VerifyOTPRequest, db: Session = Depends(get_db)):
+    otp_record = db.query(models.PasswordResetOTP).filter(
+        models.PasswordResetOTP.email == req.email
+    ).order_by(models.PasswordResetOTP.created_at.desc()).first()
+
+    if not otp_record or otp_record.is_used:
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP.")
+    
+    if otp_record.failed_attempts >= 5:
+        raise HTTPException(status_code=400, detail="Maximum attempts reached. Please request a new OTP.")
+
+    if datetime.now() > otp_record.expires_at:
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP.")
+
+    if otp_record.otp != req.otp:
+        otp_record.failed_attempts += 1
+        db.commit()
+        raise HTTPException(status_code=400, detail="Incorrect OTP.")
+
+    otp_record.is_verified = True
+    session_token = secrets.token_urlsafe(32)
+    otp_record.verified_session_token = session_token
+    db.commit()
+
+    return {"message": "OTP verified successfully.", "token": session_token}
+
+@auth_router.post("/reset-password")
+def reset_password(req: schemas.ResetPasswordRequest, request: Request, db: Session = Depends(get_db)):
+    otp_record = db.query(models.PasswordResetOTP).filter(
+        models.PasswordResetOTP.verified_session_token == req.token
+    ).first()
+
+    if not otp_record or not otp_record.is_verified or otp_record.is_used:
+        raise HTTPException(status_code=400, detail="Invalid or expired session.")
+
+    user = db.query(models.User).filter(models.User.email == otp_record.email).first()
+    if not user:
+        user = db.query(models.SuperAdmin).filter(models.SuperAdmin.email == otp_record.email).first()
+
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found.")
+
+    user.hashed_password = get_password_hash(req.new_password)
+    otp_record.is_used = True
+    otp_record.verified_session_token = None
+    db.commit()
+
+    log_auth_event(db, request, user.email, getattr(user, 'role', 'Unknown'), "Password Reset", "Success", getattr(user, 'name', 'Admin'))
+
+    return {"message": "Password reset successfully. Please sign in."}
+
 @auth_router.get("/me", response_model=schemas.UserResponse)
 def get_me(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     perms = get_user_permissions(db, current_user)
@@ -265,6 +407,58 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
 @vehicle_router.get("/")
 def get_vehicles(current_user: models.User = Depends(require_permission("vehicle_management", "view")), db: Session = Depends(get_db)):
     return db.query(models.Vehicle).filter(models.Vehicle.company_id == current_user.company_id).all()
+
+@vehicle_router.get("/vendor/{vendor_id}")
+def get_vendor_vehicles(
+    vendor_id: int,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    vehicle_type: Optional[str] = None,
+    fuel_type: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: models.User = Depends(require_permission("vendor_management", "view")),
+    db: Session = Depends(get_db)
+):
+    query = db.query(
+        models.Vehicle,
+        models.Driver.name.label('driver_name')
+    ).outerjoin(
+        models.Driver, models.Vehicle.assignedDriverId == models.Driver.id
+    ).filter(
+        models.Vehicle.company_id == current_user.company_id,
+        models.Vehicle.vendorId == vendor_id
+    )
+
+    if search:
+        search_filter = f"%{search}%"
+        query = query.filter(
+            or_(
+                models.Vehicle.plateNumber.ilike(search_filter),
+                models.Vehicle.model.ilike(search_filter),
+                models.Driver.name.ilike(search_filter)
+            )
+        )
+    if status and status != 'ALL':
+        query = query.filter(models.Vehicle.status == status)
+    if vehicle_type and vehicle_type != 'ALL':
+        query = query.filter(models.Vehicle.vehicleType == vehicle_type)
+    if fuel_type and fuel_type != 'ALL':
+        query = query.filter(models.Vehicle.fuelType == fuel_type)
+
+    total = query.count()
+    results = query.offset(skip).limit(limit).all()
+
+    # Format the response since we used a tuple query
+    formatted_results = []
+    for vehicle, driver_name in results:
+        vehicle_dict = {
+            c.name: getattr(vehicle, c.name) for c in vehicle.__table__.columns
+        }
+        vehicle_dict['driverName'] = driver_name
+        formatted_results.append(vehicle_dict)
+
+    return {"data": formatted_results, "total": total}
 
 @vehicle_router.post("/")
 def create_vehicle(vehicle: schemas.VehicleCreate, current_user: models.User = Depends(require_permission("vehicle_management", "create")), db: Session = Depends(get_db)):
@@ -966,12 +1160,15 @@ def get_drafts(current_user: models.User = Depends(get_current_user), db: Sessio
     results = []
     for d in drafts:
         # Reconstruct formData by querying _merge_contract_data
-        db_contract = db.query(models.Contract).filter(models.Contract.id == d.contract_id).first()
-        if db_contract:
-            merged = _merge_contract_data(db, db_contract)
-            formData = json.dumps(merged)
+        if getattr(d, 'formData', None):
+            formData = d.formData
         else:
-            formData = "{}"
+            db_contract = db.query(models.Contract).filter(models.Contract.id == d.contract_id).first()
+            if db_contract:
+                merged = _merge_contract_data(db, db_contract)
+                formData = json.dumps(merged)
+            else:
+                formData = "{}"
         
         results.append({
             "id": d.draft_id,
@@ -1027,12 +1224,15 @@ def get_draft(id: int, current_user: models.User = Depends(get_current_user), db
     d = db.query(models.ContractDraft).filter(models.ContractDraft.draft_id == id, models.ContractDraft.company_id == current_user.company_id).first()
     if not d: raise HTTPException(status_code=404, detail="Draft not found")
     
-    db_contract = db.query(models.Contract).filter(models.Contract.id == d.contract_id).first()
-    if db_contract:
-        merged = _merge_contract_data(db, db_contract)
-        formData = json.dumps(merged)
+    if getattr(d, 'formData', None):
+        formData = d.formData
     else:
-        formData = "{}"
+        db_contract = db.query(models.Contract).filter(models.Contract.id == d.contract_id).first()
+        if db_contract:
+            merged = _merge_contract_data(db, db_contract)
+            formData = json.dumps(merged)
+        else:
+            formData = "{}"
         
     return {
         "id": d.draft_id,
@@ -1120,7 +1320,8 @@ def create_draft(draft: schemas.ContractDraftCreate, current_user: models.User =
                 sectionStatus=draft.sectionStatus,
                 completionPercentage=draft.completionPercentage,
                 attachments=draft.attachments,
-                company_id=current_user.company_id
+                company_id=current_user.company_id,
+                formData=draft.formData
             )
             db.add(db_item)
             db.commit() # Commit to get the new draft_id
@@ -1133,6 +1334,7 @@ def create_draft(draft: schemas.ContractDraftCreate, current_user: models.User =
             db_item.sectionStatus = draft.sectionStatus
             db_item.completionPercentage = draft.completionPercentage
             db_item.attachments = draft.attachments
+            db_item.formData = draft.formData
             
         db.commit()
         return get_draft(draft_id_val, current_user, db)
@@ -1154,6 +1356,7 @@ def update_draft(id: int, draft: schemas.ContractDraftUpdate, current_user: mode
         db_item.sectionStatus = draft.sectionStatus
         db_item.completionPercentage = draft.completionPercentage
         db_item.attachments = draft.attachments
+        db_item.formData = draft.formData
         db.commit()
         
     return get_draft(id, current_user, db)
@@ -1192,16 +1395,34 @@ def delete_contract(id: int, current_user: models.User = Depends(require_permiss
 # --- VENDOR ROUTES ---
 @vendor_router.get("/", response_model=list[schemas.VendorResponse])
 def get_vendors(current_user: models.User = Depends(require_permission("vendor_management", "view")), db: Session = Depends(get_db)):
-    return db.query(models.Vendor).filter(models.Vendor.company_id == current_user.company_id).all()
+    vendors = db.query(models.Vendor).filter(models.Vendor.company_id == current_user.company_id).all()
+    for v in vendors:
+        vehicles = db.query(models.Vehicle).filter(models.Vehicle.vendorId == v.id).all()
+        v.fleetSize = len(vehicles)
+        v.vehicle_ids = [veh.id for veh in vehicles]
+    return vendors
 
 @vendor_router.post("/", response_model=schemas.VendorResponse)
 def create_vendor(vendor: schemas.VendorCreate, current_user: models.User = Depends(require_permission("vendor_management", "create")), db: Session = Depends(get_db)):
-    vendor_dict = vendor.model_dump()
+    vendor_dict = vendor.model_dump(exclude={"vehicle_ids"})
     vendor_dict['company_id'] = current_user.company_id
+    vendor_dict['fleetSize'] = 0
     db_item = models.Vendor(**vendor_dict)
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
+    
+    if getattr(vendor, "vehicle_ids", None):
+        vehicles_to_update = db.query(models.Vehicle).filter(
+            models.Vehicle.id.in_(vendor.vehicle_ids),
+            models.Vehicle.company_id == current_user.company_id
+        ).all()
+        for v in vehicles_to_update:
+            v.vendorId = db_item.id
+        db_item.fleetSize = len(vehicles_to_update)
+        db.commit()
+        db.refresh(db_item)
+        
     return db_item
 
 @vendor_router.delete("/{id}")
@@ -1368,14 +1589,42 @@ def update_contract(id: int, payload: schemas.ContractUpdate, current_user: mode
 def get_vendor(id: int, current_user: models.User = Depends(require_permission("vendor_management", "view")), db: Session = Depends(get_db)):
     db_item = db.query(models.Vendor).filter(models.Vendor.id == id, models.Vendor.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
+    vehicles = db.query(models.Vehicle).filter(models.Vehicle.vendorId == db_item.id).all()
+    db_item.fleetSize = len(vehicles)
+    db_item.vehicle_ids = [veh.id for veh in vehicles]
     return db_item
 
 @vendor_router.put("/{id}", response_model=schemas.VendorResponse)
 def update_vendor(id: int, payload: schemas.VendorUpdate, current_user: models.User = Depends(require_permission("vendor_management", "update")), db: Session = Depends(get_db)):
     db_item = db.query(models.Vendor).filter(models.Vendor.id == id, models.Vendor.company_id == current_user.company_id).first()
     if not db_item: raise HTTPException(status_code=404)
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    
+    update_data = payload.model_dump(exclude_unset=True, exclude={"vehicle_ids"})
+        
+    for key, value in update_data.items():
         setattr(db_item, key, value)
+        
+    if getattr(payload, "vehicle_ids", None) is not None:
+        # First, unassign any existing vehicles for this vendor
+        existing_vehicles = db.query(models.Vehicle).filter(
+            models.Vehicle.vendorId == db_item.id,
+            models.Vehicle.company_id == current_user.company_id
+        ).all()
+        for v in existing_vehicles:
+            v.vendorId = None
+            
+        # Then, assign the new vehicles
+        if payload.vehicle_ids:
+            new_vehicles = db.query(models.Vehicle).filter(
+                models.Vehicle.id.in_(payload.vehicle_ids),
+                models.Vehicle.company_id == current_user.company_id
+            ).all()
+            for v in new_vehicles:
+                v.vendorId = db_item.id
+            db_item.fleetSize = len(new_vehicles)
+        else:
+            db_item.fleetSize = 0
+            
     db.commit()
     db.refresh(db_item)
     return db_item
@@ -1385,6 +1634,22 @@ fuel_log_router = APIRouter(prefix="/api/fuel-logs", tags=["Fuel Logs"])
 maintenance_log_router = APIRouter(prefix="/api/maintenance-logs", tags=["Maintenance Logs"])
 compliance_doc_router = APIRouter(prefix="/api/compliance-docs", tags=["Compliance Docs"])
 app_notification_router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
+
+@app_notification_router.post("/mark-all-read")
+def mark_all_notifications_read(current_user: models.User = Depends(require_permission("notifications", "update")), db: Session = Depends(get_db)):
+    db.query(models.AppNotification).filter(
+        models.AppNotification.company_id == current_user.company_id,
+        models.AppNotification.popup_dismissed == False
+    ).update({"read": True}, synchronize_session=False)
+    db.commit()
+    return {"message": "Active notifications marked as read"}
+
+@app_notification_router.delete("/clear-all")
+def clear_all_notifications(current_user: models.User = Depends(require_permission("notifications", "delete")), db: Session = Depends(get_db)):
+    db.query(models.AppNotification).filter(models.AppNotification.company_id == current_user.company_id).update({"popup_dismissed": True}, synchronize_session=False)
+    db.commit()
+    return {"message": "All notifications cleared from popup"}
+
 system_setting_router = APIRouter(prefix="/api/settings", tags=["Settings"])
 contract_service_router = APIRouter(prefix="/api/contract-services", tags=["Contract Services"])
 contract_document_router = APIRouter(prefix="/api/contract-documents", tags=["Contract Documents"])

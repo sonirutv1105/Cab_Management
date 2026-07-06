@@ -148,7 +148,7 @@ export default function TripManagementView() {
       const driver = drivers.find((d) => d.id === t.driverId);
 
       const matchesSearch =
-        t.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        t.id.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
         (driver?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;

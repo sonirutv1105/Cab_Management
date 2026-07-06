@@ -11,7 +11,7 @@ export type AddContractStep =
 
 interface AddContractProps {
   onClose: () => void;
-  onSuccess: (id: string) => void;
+  onSuccess: (id: string, isDraft?: boolean) => void;
   resumeId?: string; // Kept for backward compatibility, currently passes to Govt form
 }
 

@@ -34,6 +34,7 @@ export type ModuleType =
   | 'Audit Logs'
   | 'User Management'
   | 'Support Tickets'
+  | 'Integration Management'
   | 'Settings';
 
 export interface Driver {
@@ -139,13 +140,45 @@ export interface Trip {
 export interface Vendor {
   id: number;
   name: string;
+  vehicle_ids?: number[];
+  vendorCode?: string;
+  vendorType?: string;
+  businessCategory?: string;
+  panNumber?: string;
   contactName: string;
+  designation?: string;
   phone: string;
+  altPhone?: string;
   email: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  pinCode?: string;
+  website?: string;
+  gstNumber?: string;
   fleetSize: number;
+  vehicleTypes?: string;
+  totalDrivers?: number;
+  operatingCities?: string;
+  serviceAvailability?: string;
   rating: number;
   slaCompliance: number; // percentage
+  complianceRating?: number;
+  responseTime?: string;
   status: 'Active' | 'Under Audit' | 'Suspended';
+  docGst?: string;
+  docPan?: string;
+  docRegistration?: string;
+  docInsurance?: string;
+  docAgreement?: string;
+  docOther?: string;
+  bankName?: string;
+  accountHolder?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+  branchName?: string;
+  upiId?: string;
 }
 
 export interface Booking {
@@ -204,6 +237,7 @@ export interface AppNotification {
   timestamp: string;
   read: boolean;
   targetRole?: string;
+  popup_dismissed?: boolean;
 }
 
 export interface AuditLog {

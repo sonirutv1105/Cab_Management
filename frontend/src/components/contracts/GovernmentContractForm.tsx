@@ -335,7 +335,7 @@ export default function GovernmentContractForm({ onClose, onSuccess, resumeId }:
   // Resume logic
   useEffect(() => {
     if (resumeId) {
-      const draft = drafts.find((d: any) => d.id === resumeId);
+      const draft = drafts.find((d: any) => d.id.toString() === resumeId.toString());
       if (draft) {
         try {
           const parsedFormData = JSON.parse(draft.formData);
@@ -345,7 +345,7 @@ export default function GovernmentContractForm({ onClose, onSuccess, resumeId }:
           console.error("Failed to parse draft form data", e);
         }
       } else {
-        const existing = contracts.find((c: any) => c.id === resumeId);
+        const existing = contracts.find((c: any) => c.id.toString() === resumeId.toString());
         if (existing) {
           setFormData(prev => ({ ...prev, ...existing }));
         }
@@ -402,7 +402,10 @@ export default function GovernmentContractForm({ onClose, onSuccess, resumeId }:
     };
 
     console.log('[Draft Save] Saving draft data payload (before API):', draftData);
-    await saveDraft(draftData);
+        const savedDraft = await saveDraft(draftData);
+        if (savedDraft) {
+          setInternalContractId(savedDraft.id.toString());
+        }
     console.log('[Draft Save] Draft saved successfully:', draftData.id);
   };
   useEffect(() => {

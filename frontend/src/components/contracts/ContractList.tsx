@@ -7,6 +7,7 @@ import {
   Trash2, Edit, Eye, Copy, RefreshCw, ChevronLeft, ChevronRight,
   DownloadCloud, AlertCircle, XCircle
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface ContractListProps {
   onView: (id: string) => void;
@@ -17,6 +18,22 @@ interface ContractListProps {
 export default function ContractList({ onView, onCreate, viewMode = 'list' }: ContractListProps) {
   const { contracts, drafts, deleteContract, deleteDraft, changeContractStatus, isLoading, error, fetchContracts, duplicateContract } = useContracts();
   const [searchTerm, setSearchTerm] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteDraft = async (id: string) => {
+    if (deletingId) return;
+    if (window.confirm("Are you sure you want to delete this draft contract?")) {
+      setDeletingId(id);
+      try {
+        await deleteDraft(id);
+        toast.success("Draft contract deleted successfully.");
+      } catch (err: any) {
+        toast.error(err.message || "Failed to delete draft.");
+      } finally {
+        setDeletingId(null);
+      }
+    }
+  };
   const [statusFilter, setStatusFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All Types');
   const [departmentFilter, setDepartmentFilter] = useState('All Departments');
@@ -421,12 +438,19 @@ export default function ContractList({ onView, onCreate, viewMode = 'list' }: Co
                     </div>
                     <div className="flex justify-between items-center border-t border-gray-100 dark:border-slate-700 pt-3">
                       <button 
-                        onClick={() => {
-                          if (window.confirm('Delete this draft?')) deleteDraft(draft.id.toString());
-                        }}
-                        className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 font-medium flex items-center px-2 py-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
+                        onClick={() => handleDeleteDraft(draft.id.toString())}
+                        disabled={deletingId === draft.id.toString()}
+                        className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 font-medium flex items-center px-2 py-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Trash2 className="w-3 h-3 mr-1" /> Delete
+                        {deletingId === draft.id.toString() ? (
+                          <>
+                            <RefreshCw className="w-3 h-3 mr-1 animate-spin" /> Deleting...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="w-3 h-3 mr-1" /> Delete
+                          </>
+                        )}
                       </button>
                       <button 
                         onClick={() => onCreate(draft.id.toString(), isCorp ? 'corp' : 'gov')}

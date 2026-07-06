@@ -17,8 +17,10 @@ import {
   Ticket,
   Calendar,
   Clock,
-  ArrowUpDown
+  ArrowUpDown,
+  Plus
 } from 'lucide-react';
+import AddBookingModal from './AddBookingModal';
 
 export default function BookingManagementView() {
   const {
@@ -38,8 +40,8 @@ export default function BookingManagementView() {
   const [hrFilter, setHrFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<keyof Booking>('bookingDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -161,30 +163,40 @@ export default function BookingManagementView() {
           <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Verify booking requests, approve requests, and assign employees to trips.</p>
         </div>
 
-        <div className="relative" ref={exportMenuRef}>
+        <div className="flex items-center space-x-3">
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              onClick={() => setExportMenuOpen(!exportMenuOpen)}
+              className="px-3.5 py-2 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-bold duration-150 flex items-center space-x-2 shadow-sm self-start"
+            >
+              <Download className="w-4 h-4" />
+              <span>Export Bookings</span>
+            </button>
+            {exportMenuOpen && (
+              <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg z-50 overflow-hidden">
+                <button 
+                  onClick={() => handleExport('pdf')}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700"
+                >
+                  Export PDF
+                </button>
+                <button 
+                  onClick={() => handleExport('excel')}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700"
+                >
+                  Export Excel
+                </button>
+              </div>
+            )}
+          </div>
+          
           <button
-            onClick={() => setExportMenuOpen(!exportMenuOpen)}
-            className="px-3.5 py-2 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-bold duration-150 flex items-center space-x-2 shadow-sm self-start"
+            onClick={() => setAddModalOpen(true)}
+            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold duration-150 flex items-center space-x-2 shadow-sm self-start"
           >
-            <Download className="w-4 h-4" />
-            <span>Export Bookings</span>
+            <Plus className="w-4 h-4" />
+            <span>Add Booking</span>
           </button>
-          {exportMenuOpen && (
-            <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg z-50 overflow-hidden">
-              <button 
-                onClick={() => handleExport('pdf')}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700"
-              >
-                Export PDF
-              </button>
-              <button 
-                onClick={() => handleExport('excel')}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700"
-              >
-                Export Excel
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -249,6 +261,7 @@ export default function BookingManagementView() {
               <th className="p-3.5">Purpose of Travel</th>
               <th className="p-3.5 text-center">Manager Status</th>
               <th className="p-3.5 text-center">HR Assignment</th>
+              <th className="p-3.5">Source & Sync</th>
               <th className="p-3.5 text-right">Actions</th>
             </tr>
           </thead>
@@ -316,6 +329,15 @@ export default function BookingManagementView() {
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-extrabold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-400 animate-pulse">
                         Pending HR
                       </span>
+                    )}
+                  </td>
+                  <td className="p-3.5">
+                    <div className="font-semibold text-gray-900 dark:text-gray-100">{b.booking_source || 'Manual'}</div>
+                    {b.api_received_at && (
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400">{new Date(b.api_received_at).toLocaleDateString()}</div>
+                    )}
+                    {b.sync_status && b.sync_status !== 'Manual' && (
+                      <div className="text-[10px] font-medium text-blue-600 dark:text-blue-400">{b.sync_status}</div>
                     )}
                   </td>
                   <td className="p-3.5 text-right">
@@ -445,6 +467,8 @@ export default function BookingManagementView() {
           </div>
         </div>
       )}
+      {/* Add Booking Modal */}
+      <AddBookingModal isOpen={addModalOpen} onClose={() => setAddModalOpen(false)} />
     </div>
   );
 }

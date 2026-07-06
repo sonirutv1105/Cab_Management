@@ -1,12 +1,8 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useCMS } from '../context/CMSContext';
 import { Vendor, ComplianceDoc } from '../types';
 import { api } from '../api/client';
+import toast from 'react-hot-toast';
 import {
   Search,
   Filter,
@@ -20,6 +16,7 @@ import {
   AlertTriangle,
   XCircle,
 } from 'lucide-react';
+import VendorForm from './vendors/VendorForm';
 
 interface Props {
   activeSection: 'vendors' | 'compliance';
@@ -60,77 +57,89 @@ export default function ComplianceDocumentsView({ activeSection }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingVendorId, setEditingVendorId] = useState<number | null>(null);
 
+  // Vendor Fleet Management View State
+  const [managingFleetVendor, setManagingFleetVendor] = useState<Vendor | null>(null);
+  const [vendorVehicles, setVendorVehicles] = useState<any[]>([]);
+  const [loadingVehicles, setLoadingVehicles] = useState(false);
+
+  const handleViewFleet = async (vendor: Vendor) => {
+    setManagingFleetVendor(vendor);
+    setLoadingVehicles(true);
+    try {
+      const data = await api.getVendorVehicles(vendor.id);
+      setVendorVehicles(data);
+    } catch (err) {
+      toast.error('Failed to fetch vehicles for vendor');
+    } finally {
+      setLoadingVehicles(false);
+    }
+  };
+
   // Form parameters
   const [vendorForm, setVendorForm] = useState<Omit<Vendor, 'id'>>({
-    name: '', contactName: '', phone: '', email: '', fleetSize: '' as any, rating: 5.0, slaCompliance: 100.0, status: 'Active'
+    name: '', contactName: '', phone: '', altPhone: '', email: '', 
+    address: '', city: '', state: '', country: '', pinCode: '', 
+    website: '', gstNumber: '',
+    fleetSize: '' as any, rating: 5.0, slaCompliance: 100.0, status: 'Active'
   });
-
   const [complianceForm, setComplianceForm] = useState<Omit<ComplianceDoc, 'id'>>({
     entityId: '', entityType: 'Vehicle', documentType: 'PUC', documentNumber: '', expiryDate: '', status: 'Valid'
   });
 
   // Handle forms submits
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isReadOnly) return;
-
-    if (activeSection === 'vendors') {
-      if (Number(vendorForm.fleetSize) <= 0) {
-        alert("Fleet Size must be greater than 0.");
-        return;
-      }
+    if (activeSection === 'compliance') {
+      const newC: Partial<ComplianceDoc> = {
+        ...complianceForm,
+        entityId: complianceForm.entityId as number
+      };
       if (editingVendorId) {
-        updateVendor({ ...vendorForm, id: editingVendorId } as Vendor);
+        toast.success("Compliance Document updated successfully!");
       } else {
-        addVendor(vendorForm as any);
+        await addComplianceDoc(newC);
+        toast.success("Compliance Document added successfully!");
       }
+      setModalOpen(false);
       setEditingVendorId(null);
-      setVendorForm({ name: '', contactName: '', phone: '', email: '', fleetSize: '' as any, rating: 5.0, slaCompliance: 100.0, status: 'Active' });
-    } else if (activeSection === 'compliance') {
-      addComplianceDoc(complianceForm);
     }
-    setModalOpen(false);
   };
 
-  // Filter processed data
-  const processedVendors = vendors.filter((v) => v.name.toLowerCase().includes(searchTerm.toLowerCase()) || v.contactName.toLowerCase().includes(searchTerm.toLowerCase()));
-  const processedCompliance = complianceDocs.filter((c) => c.documentNumber.toLowerCase().includes(searchTerm.toLowerCase()) || c.documentType.toLowerCase().includes(searchTerm.toLowerCase()));
-
-  // CSV exports handlers
-  const handleExport = async (format: 'pdf' | 'excel') => {
-    setExportMenuOpen(false);
-    
-    let payload;
-    let filename = '';
-
-    if (activeSection === 'vendors') {
-      payload = {
-        title: "Vendors Data",
-        headers: ['Vendor ID', 'Company Name', 'Contact', 'Phone', 'Email', 'Fleet count', 'SLA compliance (%)', 'Status'],
-        rows: processedVendors.map((v) => [v.id, v.name, v.contactName, v.phone, v.email, v.fleetSize, v.slaCompliance, v.status])
-      };
-      filename = `CMS_Vendors_Export.${format === 'excel' ? 'xlsx' : 'pdf'}`;
-    } else if (activeSection === 'compliance') {
-      payload = {
-        title: "Compliance Docs",
-        headers: ['Compliance ID', 'Type', 'Document Type', 'Document Code', 'Expiry', 'Status'],
-        rows: processedCompliance.map((c) => [c.id, c.entityType, c.documentType, c.documentNumber, c.expiryDate, c.status])
-      };
-      filename = `CMS_ComplianceDocs_Export.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+  const handleVendorSubmit = async (payload: any) => {
+    if (editingVendorId) {
+      await updateVendor(editingVendorId, payload);
+      toast.success("Vendor updated successfully!");
+    } else {
+      await addVendor(payload);
+      toast.success("Vendor added successfully!");
     }
+    setModalOpen(false);
+    setEditingVendorId(null);
+  };
 
+  // Export functionality
+  const handleExportCSV = () => {
     try {
-      let blob;
-      if (format === 'pdf') {
-        blob = await api.exportToPdf(payload);
+      let csv = '';
+      if (activeSection === 'vendors') {
+        const headers = ['Vendor Name', 'Contact Person', 'Email', 'Phone', 'Fleet Size', 'SLA', 'Rating', 'Status'];
+        csv += headers.join(',') + '\n';
+        vendors.forEach(v => {
+          csv += `"${v.name}","${v.contactName}","${v.email || ''}","${v.phone || ''}","${v.fleetSize}","${v.slaCompliance}%","${v.rating}","${v.status}"\n`;
+        });
       } else {
-        blob = await api.exportToExcel(payload);
+        const headers = ['Doc ID', 'Entity Type', 'Entity ID', 'Doc Type', 'Doc Number', 'Expiry Date', 'Status'];
+        csv += headers.join(',') + '\n';
+        complianceDocs.forEach(c => {
+          csv += `"${c.id}","${c.entityType}","${c.entityId}","${c.documentType}","${c.documentNumber}","${c.expiryDate}","${c.status}"\n`;
+        });
       }
-      
-      const url = window.URL.createObjectURL(new Blob([blob]));
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.setAttribute('href', url);
-      a.setAttribute('download', filename);
+      a.href = url;
+      a.download = `${activeSection}_export.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -139,6 +148,7 @@ export default function ComplianceDocumentsView({ activeSection }: Props) {
       alert("Failed to export data.");
     }
   };
+
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm space-y-6" id="compliance-documents-panel">
@@ -149,85 +159,108 @@ export default function ComplianceDocumentsView({ activeSection }: Props) {
             <>
               <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center space-x-2">
                 <Briefcase className="w-5.5 h-5.5 text-blue-600" />
-                <span>Logistics Vendors</span>
+                <span>Vendor Management</span>
               </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Manage vendors, rating metrics, fleet sizes, and contract details</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Manage vendor profiles, contact information, fleet details, SLA compliance, ratings, and performance.</p>
             </>
           )}
           {activeSection === 'compliance' && (
             <>
               <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center space-x-2">
                 <ShieldCheck className="w-5.5 h-5.5 text-blue-600" />
-                <span>Compliance Documents</span>
+                <span>Compliance & Documents</span>
               </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Track cab documents (PUC, RC, Fitness Certificate) and driver verifications</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Track vehicle PUC, insurances, driver licenses, and background check renewals.</p>
             </>
           )}
         </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <div className="relative" ref={exportMenuRef}>
             <button
               onClick={() => setExportMenuOpen(!exportMenuOpen)}
-              className="px-3.5 py-2 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-bold flex items-center space-x-2 shadow-sm"
+              className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition flex items-center gap-2"
             >
-              <Download className="w-4 h-4" />
-              <span>Export</span>
+              <Download className="w-4 h-4" /> Export
             </button>
             {exportMenuOpen && (
-              <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg z-50 overflow-hidden">
-                <button 
-                  onClick={() => handleExport('pdf')}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700"
-                >
-                  Export PDF
-                </button>
-                <button 
-                  onClick={() => handleExport('excel')}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700"
-                >
-                  Export Excel
-                </button>
+              <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50">
+                <div className="p-1">
+                  <button onClick={() => { handleExportCSV(); setExportMenuOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">Export CSV</button>
+                  <button onClick={() => { setExportMenuOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">Export PDF</button>
+                </div>
               </div>
             )}
           </div>
-
           {!isReadOnly && (
             <button
               onClick={() => {
-                setEditingVendorId(null);
-                setVendorForm({ name: '', contactName: '', phone: '', email: '', fleetSize: '' as any, rating: 5.0, slaCompliance: 100.0, status: 'Active' });
-                setModalOpen(true);
+                if (activeSection === 'vendors') {
+                  setVendorForm({
+                    name: '', contactName: '', phone: '', altPhone: '', email: '', 
+                    address: '', city: '', state: '', country: '', pinCode: '', 
+                    website: '', gstNumber: '',
+                    fleetSize: '' as any, rating: 5.0, slaCompliance: 100.0, status: 'Active'
+                  });
+                  setEditingVendorId(null);
+                  setModalOpen(true);
+                } else {
+                  setComplianceForm({
+                    entityId: '', entityType: 'Vehicle', documentType: 'PUC', documentNumber: '', expiryDate: '', status: 'Valid'
+                  });
+                  setEditingVendorId(null);
+                  setModalOpen(true);
+                }
               }}
-              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 shadow-sm"
-              id="compliance-docs-add-trigger"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition flex items-center gap-2"
             >
-              <Plus className="w-4 h-4" />
-              <span>Add Entry</span>
+              <Plus className="w-4 h-4" /> {activeSection === 'vendors' ? 'Add Vendor' : 'Add Document'}
             </button>
           )}
         </div>
       </div>
 
-      <div className="pb-2">
-        <div className="relative max-w-sm">
-          <Search className="w-4.5 h-4.5 text-gray-400 dark:text-gray-500 absolute left-3.5 top-3" />
+      {/* FILTERS SECTION */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search..."
+            placeholder={activeSection === 'vendors' ? "Search vendors by name, contact, phone..." : "Search documents by ID, number, entity..."}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full text-xs bg-gray-50 dark:bg-gray-700 pl-10 pr-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-800 dark:text-gray-200 focus:outline-none"
-            id="compliance-module-search"
+            className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition"
           />
+        </div>
+        <div className="relative">
+          <Filter className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="pl-9 pr-8 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none font-medium text-gray-700 dark:text-gray-300"
+          >
+            <option value="ALL">All Statuses</option>
+            {activeSection === 'vendors' ? (
+              <>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </>
+            ) : (
+              <>
+                <option value="Valid">Valid</option>
+                <option value="Expiring">Expiring Soon</option>
+                <option value="Expired">Expired</option>
+              </>
+            )}
+          </select>
         </div>
       </div>
 
-      {/* DYNAMIC SUBMODULE DATA TABLES */}
-      <div className="overflow-x-auto border rounded-xl border-gray-100 dark:border-gray-700">
-
+      {/* DATA TABLES SECTION */}
+      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm overflow-x-auto">
+        
+        {/* VENDORS VIEW */}
         {activeSection === 'vendors' && (
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs whitespace-nowrap">
             <thead>
               <tr className="bg-slate-50 dark:bg-gray-700 border-b text-gray-500 dark:text-gray-400 font-bold uppercase">
                 <th className="p-3.5">Vendor Agency</th>
@@ -236,26 +269,48 @@ export default function ComplianceDocumentsView({ activeSection }: Props) {
                 <th className="p-3.5">Fleet Size</th>
                 <th className="p-3.5">SLA Compliance</th>
                 <th className="p-3.5">Rating</th>
-                <th className="p-3.5 text-right">Delete</th>
+                <th className="p-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y font-medium text-gray-700 dark:text-gray-300">
-              {processedVendors.map((v) => (
+              {vendors.map((v) => (
                 <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-gray-700/50 duration-150">
                   <td className="p-3.5 font-bold text-gray-900 dark:text-gray-100">{v.name}</td>
                   <td className="p-3.5 text-gray-800 dark:text-gray-200">{v.contactName}</td>
                   <td className="p-3.5 leading-normal text-slate-500 dark:text-gray-400">
-                    <div>{v.email}</div>
-                    <div className="font-mono text-[10px] mt-0.5">{v.phone}</div>
+                    {(!v.email && !v.phone) ? (
+                      <span className="inline-flex px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded text-[10px] font-bold">Not Available</span>
+                    ) : (
+                      <>
+                        {v.email && <div>Email: <span className="font-medium text-gray-800 dark:text-gray-200">{v.email}</span></div>}
+                        {v.phone && <div className="font-mono text-[10px] mt-0.5">Phone: <span className="font-medium text-gray-800 dark:text-gray-200">{v.phone}</span></div>}
+                      </>
+                    )}
                   </td>
-                  <td className="p-3.5 font-extrabold text-blue-600">{v.fleetSize} {v.fleetSize === 1 ? 'Cab' : 'Cabs'}</td>
+                  <td className="p-3.5">
+                    <button 
+                      onClick={() => handleViewFleet(v)}
+                      className="font-extrabold text-blue-600 hover:text-blue-800 hover:underline transition"
+                    >
+                      {v.fleetSize} {v.fleetSize === 1 ? 'Cab' : 'Cabs'}
+                    </button>
+                  </td>
                   <td className="p-3.5 text-emerald-700 font-black">{v.slaCompliance}% compliant</td>
                   <td className="p-3.5">★ {v.rating.toFixed(1)} / 5.0</td>
                   <td className="p-3.5 text-right font-semibold">
                     <button
+                      onClick={() => handleViewFleet(v)}
+                      disabled={isReadOnly}
+                      className="p-1 text-gray-400 dark:text-gray-500 hover:text-emerald-600 rounded mr-2"
+                      title="View Vendor Fleet"
+                    >
+                      <Briefcase className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => { setEditingVendorId(v.id); setVendorForm(v); setModalOpen(true); }}
                       disabled={isReadOnly}
                       className="p-1 text-gray-400 dark:text-gray-500 hover:text-blue-600 rounded mr-2"
+                      title="Edit Vendor"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
@@ -288,7 +343,7 @@ export default function ComplianceDocumentsView({ activeSection }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y font-medium text-gray-700 dark:text-gray-300">
-              {processedCompliance.map((c) => (
+              {complianceDocs.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-gray-700/50 duration-150">
                   <td className="p-3.5 font-bold font-mono text-gray-400 dark:text-gray-500 uppercase">{c.id}</td>
                   <td className="p-3.5">
@@ -329,133 +384,178 @@ export default function ComplianceDocumentsView({ activeSection }: Props) {
         )}
       </div>
 
-      {/* COMPREHENSIVE SUB-MODULE CREATION DIALOGS */}
+      {/* NEW/EDIT MODALS */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl border max-w-md w-full animate-in zoom-in-95 duration-150">
-            <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 border-b pb-3 mb-4">{editingVendorId ? 'Edit Vendor' : 'Add New Entry'}</h3>
-            <form onSubmit={handleAddSubmit} className="space-y-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-7xl h-[95vh] flex flex-col overflow-hidden shadow-2xl border border-gray-200 dark:border-gray-700">
+            
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-slate-700/50">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center space-x-2">
+                {activeSection === 'vendors' ? (
+                  <><Briefcase className="w-5 h-5 text-blue-600" /><span>{editingVendorId ? 'Edit Vendor Profile' : 'Add New Vendor'}</span></>
+                ) : (
+                  <><ShieldCheck className="w-5 h-5 text-blue-600" /><span>{editingVendorId ? 'Edit Compliance Document' : 'Add Compliance Document'}</span></>
+                )}
+              </h3>
+              <button 
+                onClick={() => setModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
 
-              {activeSection === 'vendors' && (
-                <>
-                  <div>
-                    <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1">Vendor Name</label>
-                    <input
-                      type="text"
-                      className="w-full text-xs border rounded-lg p-2.5 bg-gray-50 dark:bg-gray-700"
-                      value={vendorForm.name}
-                      onChange={(e) => setVendorForm({ ...vendorForm, name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 mt-4">
+            {/* Modal Body */}
+            <div className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900/50">
+              {activeSection === 'vendors' ? (
+                <VendorForm 
+                  initialData={vendorForm} 
+                  onSuccess={handleVendorSubmit} 
+                  onBack={() => setModalOpen(false)} 
+                />
+              ) : (
+                <form onSubmit={handleAddSubmit} className="p-8 max-w-3xl mx-auto space-y-6">
+                  {/* ... compliance form (keep simple for now) */}
+                  <div className="grid grid-cols-2 gap-6">
                     <div>
-                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1">Fleet Size *</label>
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        className="w-full text-xs border p-2.5 rounded-lg bg-gray-50 dark:bg-gray-700"
-                        value={vendorForm.fleetSize}
-                        onChange={(e) => setVendorForm({ ...vendorForm, fleetSize: parseInt(e.target.value) || ('' as any) })}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1">Contact Person Name</label>
-                      <input
-                        type="text"
-                        className="w-full text-xs border p-2.5 rounded-lg bg-gray-50 dark:bg-gray-700"
-                        value={vendorForm.contactName}
-                        onChange={(e) => setVendorForm({ ...vendorForm, contactName: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1">SLA Compliance Target (%)</label>
-                      <input
-                        type="number"
-                        className="w-full text-xs border p-2.5"
-                        value={vendorForm.slaCompliance}
-                        onChange={(e) => setVendorForm({ ...vendorForm, slaCompliance: parseFloat(e.target.value) || 100 })}
-                        required
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {activeSection === 'compliance' && (
-                <>
-                  <div>
-                    <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1">Document Type</label>
-                    <select
-                      className="w-full text-xs border rounded-lg p-2.5 bg-gray-50 dark:bg-gray-700"
-                      value={complianceForm.documentType}
-                      onChange={(e) => setComplianceForm({ ...complianceForm, documentType: e.target.value as any })}
-                    >
-                      <option value="PUC">PUC Certificate</option>
-                      <option value="Commercial Permit">Commercial Permit</option>
-                      <option value="Fitness Certificate">Fitness Certificate</option>
-                      <option value="Police Verification">Police Verification Certificate</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1">Document Number</label>
-                    <input
-                      type="text"
-                      className="w-full text-xs border rounded-lg p-2.5"
-                      value={complianceForm.documentNumber}
-                      onChange={(e) => setComplianceForm({ ...complianceForm, documentNumber: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1">Expiry Date</label>
-                      <input
-                        type="date"
-                        className="w-full text-xs border p-2"
-                        value={complianceForm.expiryDate}
-                        onChange={(e) => setComplianceForm({ ...complianceForm, expiryDate: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1">Status</label>
-                      <select
-                        className="w-full text-xs border p-2"
-                        value={complianceForm.status}
-                        onChange={(e) => setComplianceForm({ ...complianceForm, status: e.target.value as any })}
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-2 uppercase tracking-wider">Entity Type</label>
+                      <select 
+                        value={complianceForm.entityType} 
+                        onChange={e => setComplianceForm({...complianceForm, entityType: e.target.value})}
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
                       >
-                        <option value="Valid">Valid / Confirmed</option>
-                        <option value="Expiring">Expiring</option>
+                        <option value="Vehicle">Vehicle</option>
+                        <option value="Driver">Driver</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-2 uppercase tracking-wider">Entity ID / Registration</label>
+                      <input 
+                        type="text" 
+                        value={complianceForm.entityId} 
+                        onChange={e => setComplianceForm({...complianceForm, entityId: e.target.value})}
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-2 uppercase tracking-wider">Document Type</label>
+                      <select 
+                        value={complianceForm.documentType} 
+                        onChange={e => setComplianceForm({...complianceForm, documentType: e.target.value})}
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="PUC">PUC (Pollution)</option>
+                        <option value="Insurance">Insurance</option>
+                        <option value="License">Driving License</option>
+                        <option value="Registration">RC Book</option>
+                        <option value="Permit">State Permit</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-2 uppercase tracking-wider">Document Number</label>
+                      <input 
+                        type="text" 
+                        value={complianceForm.documentNumber} 
+                        onChange={e => setComplianceForm({...complianceForm, documentNumber: e.target.value})}
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-2 uppercase tracking-wider">Expiry Date</label>
+                      <input 
+                        type="date" 
+                        value={complianceForm.expiryDate} 
+                        onChange={e => setComplianceForm({...complianceForm, expiryDate: e.target.value})}
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-2 uppercase tracking-wider">Status</label>
+                      <select 
+                        value={complianceForm.status} 
+                        onChange={e => setComplianceForm({...complianceForm, status: e.target.value as 'Valid'|'Expired'|'Expiring'})}
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="Valid">Valid</option>
+                        <option value="Expiring">Expiring Soon</option>
                         <option value="Expired">Expired</option>
                       </select>
                     </div>
                   </div>
-                </>
+                  <div className="pt-6 border-t border-gray-200 dark:border-slate-700 flex justify-end gap-3">
+                    <button type="button" onClick={() => setModalOpen(false)} className="px-6 py-3 text-sm font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition">Cancel</button>
+                    <button type="submit" className="px-6 py-3 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition">Save Document</button>
+                  </div>
+                </form>
               )}
+            </div>
+          </div>
+        </div>
+      )}
 
-              <div className="flex justify-end space-x-3 pt-4 border-t">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setModalOpen(false);
-                    setEditingVendorId(null);
-                  }}
-                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg"
-                >
-                  {editingVendorId ? 'Save Changes' : 'Add Entry'}
-                </button>
-              </div>
-            </form>
+      {/* VENDOR FLEET MODAL */}
+      {managingFleetVendor && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-[60] animate-in fade-in">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-gray-200 dark:border-gray-700">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-slate-700/50">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center space-x-2">
+                <Briefcase className="w-5 h-5 text-blue-600" />
+                <span>{managingFleetVendor.name} - Assigned Vehicles</span>
+              </h3>
+              <button 
+                onClick={() => setManagingFleetVendor(null)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-auto bg-white dark:bg-gray-800 p-6">
+              {loadingVehicles ? (
+                <div className="text-center py-10 text-gray-500 font-bold">Loading vehicles...</div>
+              ) : vendorVehicles.length === 0 ? (
+                <div className="text-center py-10 text-gray-500 font-bold">No vehicles assigned to this vendor.</div>
+              ) : (
+                <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+                  <table className="w-full text-left text-xs whitespace-nowrap">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-gray-700 border-b text-gray-500 dark:text-gray-400 font-bold uppercase">
+                        <th className="p-3">Vehicle Number</th>
+                        <th className="p-3">Name/Model</th>
+                        <th className="p-3">Brand</th>
+                        <th className="p-3">Type</th>
+                        <th className="p-3">Driver Name</th>
+                        <th className="p-3">Capacity</th>
+                        <th className="p-3">Fuel</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3">Insurance Exp</th>
+                        <th className="p-3">RC Exp</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y font-medium text-gray-700 dark:text-gray-300">
+                      {vendorVehicles.map(vh => (
+                        <tr key={vh.id} className="hover:bg-slate-50 dark:hover:bg-gray-700/50 duration-150">
+                          <td className="p-3 font-bold text-gray-900 dark:text-gray-100">{vh.plateNumber}</td>
+                          <td className="p-3">{vh.model}</td>
+                          <td className="p-3">{vh.make}</td>
+                          <td className="p-3">{vh.vehicleType}</td>
+                          <td className="p-3">{vh.driver_name || 'Unassigned'}</td>
+                          <td className="p-3 text-center">{vh.seatingCapacity}</td>
+                          <td className="p-3">{vh.fuelType}</td>
+                          <td className="p-3">{vh.status}</td>
+                          <td className="p-3 text-red-600">{vh.insuranceExpiry || 'N/A'}</td>
+                          <td className="p-3 text-red-600">N/A</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

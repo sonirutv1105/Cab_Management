@@ -598,7 +598,7 @@ export default function AddDriverForm({ onClose, onSuccess, resumeDraft, editing
 
         {/* Main Form Area */}
         <div className="flex-1 overflow-y-auto p-6 md:p-10 custom-scrollbar bg-[#f8fafc] dark:bg-slate-900/50">
-          <div className="max-w-4xl mx-auto">
+          <div className="w-full">
             <div className="mb-6">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
                 <span className="mr-3">{STEPS.find(s => s.id === currentStep)?.icon}</span>

@@ -33,6 +33,17 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class VerifyOTPRequest(BaseModel):
+    email: str
+    otp: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
 class DriverBase(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
@@ -210,7 +221,7 @@ class VehicleBase(BaseModel):
     seatingCapacity: int
     fuelType: str
     status: str = "Available"
-    vendorId: int
+    vendorId: Optional[int] = None
     insuranceExpiry: str
     lastServiceDate: str
     year: Optional[int] = None
@@ -250,13 +261,45 @@ class TripResponse(TripBase):
 
 class VendorBase(BaseModel):
     name: str
+    vehicle_ids: Optional[List[int]] = []
+    vendorCode: Optional[str] = None
+    vendorType: Optional[str] = None
+    businessCategory: Optional[str] = None
+    panNumber: Optional[str] = None
     contactName: str
+    designation: Optional[str] = None
     phone: str
+    altPhone: Optional[str] = None
     email: str
-    fleetSize: int = Field(..., gt=0)
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    pinCode: Optional[str] = None
+    website: Optional[str] = None
+    gstNumber: Optional[str] = None
+    fleetSize: int = Field(0)
+    vehicleTypes: Optional[str] = None
+    totalDrivers: Optional[int] = None
+    operatingCities: Optional[str] = None
+    serviceAvailability: Optional[str] = None
     rating: float = 5.0
     slaCompliance: float = 100.0
+    complianceRating: Optional[float] = None
+    responseTime: Optional[str] = None
     status: str = "Active"
+    docGst: Optional[str] = None
+    docPan: Optional[str] = None
+    docRegistration: Optional[str] = None
+    docInsurance: Optional[str] = None
+    docAgreement: Optional[str] = None
+    docOther: Optional[str] = None
+    bankName: Optional[str] = None
+    accountHolder: Optional[str] = None
+    accountNumber: Optional[str] = None
+    ifscCode: Optional[str] = None
+    branchName: Optional[str] = None
+    upiId: Optional[str] = None
 
 class VendorCreate(VendorBase):
     pass
@@ -625,6 +668,7 @@ class AppNotificationBase(BaseModel):
     timestamp: str
     read: bool = False
     targetRole: Optional[str] = None
+    popup_dismissed: bool = False
 
 class AppNotificationCreate(AppNotificationBase):
     pass

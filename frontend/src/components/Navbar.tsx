@@ -32,8 +32,10 @@ export default function Navbar({ setMobileOpen, isCollapsed, setIsCollapsed }: N
   const {
     currentUser,
     notifications,
+    activePopupNotifications,
     markNotificationRead,
     markAllNotificationsRead,
+    clearAllNotifications,
     activeModule,
     setActiveModule,
     logout
@@ -42,8 +44,9 @@ export default function Navbar({ setMobileOpen, isCollapsed, setIsCollapsed }: N
   const { theme, toggleTheme, isDark } = useTheme();
 
   const [notifPopoverOpen, setNotifPopoverOpen] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  const unreadNotifs = notifications.filter((n) => !n.read);
+  const unreadNotifs = activePopupNotifications.filter((n) => !n.read);
   const unreadCount = unreadNotifs.length;
 
 
@@ -98,60 +101,94 @@ export default function Navbar({ setMobileOpen, isCollapsed, setIsCollapsed }: N
 
           {notifPopoverOpen && (
             <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl dark:shadow-gray-950/40 border border-gray-200 dark:border-gray-700 py-3 z-50 animate-in fade-in slide-in-from-top-1">
-              <div className="flex items-center justify-between px-4 pb-2.5 mb-2 border-b border-gray-100 dark:border-gray-700">
-                <div className="flex items-center space-x-1.5">
-                  <span className="font-extrabold text-sm text-gray-900 dark:text-gray-100">Alerts & Notifications</span>
-                  <span className="p-0.5 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 text-[10px] font-bold rounded">
-                    {unreadCount} Total
-                  </span>
+              <div className="px-4 pb-2.5 mb-2 border-b border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="font-extrabold text-sm text-gray-900 dark:text-gray-100">Alerts & Notifications</span>
+                    <span className="p-0.5 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 text-[10px] font-bold rounded">
+                      {unreadCount} Total
+                    </span>
+                  </div>
                 </div>
-                <button
-                  onClick={() => {
-                    markAllNotificationsRead();
-                    setNotifPopoverOpen(false);
-                  }}
-                  className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
-                >
-                  Dismiss all
-                </button>
+                
+                {showClearConfirm ? (
+                  <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                    <span className="text-[11px] font-semibold text-red-700 dark:text-red-400">Are you sure you want to clear all notifications?</span>
+                    <div className="flex space-x-2">
+                      <button 
+                        onClick={() => setShowClearConfirm(false)}
+                        className="text-[11px] font-semibold text-gray-600 dark:text-gray-400 hover:underline"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        onClick={() => {
+                          clearAllNotifications();
+                          setShowClearConfirm(false);
+                          setNotifPopoverOpen(false);
+                        }}
+                        className="text-[11px] font-semibold text-red-600 dark:text-red-400 hover:underline"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-end space-x-2">
+                    <button
+                      onClick={() => markAllNotificationsRead()}
+                      className="px-2 py-1 text-[11px] font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-900/30 rounded duration-150"
+                    >
+                      Mark All as Read
+                    </button>
+                    <button
+                      onClick={() => setShowClearConfirm(true)}
+                      className="px-2 py-1 text-[11px] font-semibold text-red-600 border border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/30 rounded duration-150"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="max-h-72 overflow-y-auto divide-y divide-gray-50 dark:divide-gray-700 px-1">
-                {notifications.slice(0, 5).map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => {
-                      markNotificationRead(item.id);
-                      setActiveModule('Notifications');
-                      setNotifPopoverOpen(false);
-                    }}
-                    className={`block p-3 hover:bg-slate-50 dark:hover:bg-gray-700 duration-150 text-left rounded-lg cursor-pointer ${
-                      item.read ? 'opacity-70' : 'bg-slate-50/40 dark:bg-gray-700/40 border-l-2 border-blue-500'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start">
-                      <span
-                        className={`text-[9px] uppercase font-extrabold px-1.5 py-0.2 rounded ${
-                          item.severity === 'Critical'
-                            ? 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-400'
-                            : item.severity === 'Warning'
-                            ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-400'
-                            : 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-400'
-                        }`}
-                      >
-                        {item.category} • {item.severity}
-                      </span>
-                      <span className="text-[10px] text-gray-400 dark:text-gray-500">{item.timestamp}</span>
+                {activePopupNotifications.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">
+                    No active notifications.
+                  </div>
+                ) : (
+                  activePopupNotifications.slice(0, 5).map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        markNotificationRead(item.id as string);
+                        setActiveModule('Notifications');
+                        setNotifPopoverOpen(false);
+                      }}
+                      className={`block p-3 hover:bg-slate-50 dark:hover:bg-gray-700 duration-150 text-left rounded-lg cursor-pointer ${
+                        item.read ? 'opacity-70' : 'bg-slate-50/40 dark:bg-gray-700/40 border-l-2 border-blue-500'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <span
+                          className={`text-[9px] uppercase font-extrabold px-1.5 py-0.2 rounded ${
+                            item.severity === 'Critical'
+                              ? 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-400'
+                              : item.severity === 'Warning'
+                              ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-400'
+                              : 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-400'
+                          }`}
+                        >
+                          {item.category} • {item.severity}
+                        </span>
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500">{item.timestamp}</span>
+                      </div>
+                      <p className="text-xs font-bold text-gray-900 dark:text-gray-100 mt-1 leading-tight">{item.title}</p>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-snug line-clamp-2">
+                        {item.message}
+                      </p>
                     </div>
-                    <p className="text-xs font-bold text-gray-900 dark:text-gray-100 mt-1 leading-tight">{item.title}</p>
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{item.message}</p>
-                  </div>
-                ))}
-
-                {notifications.length === 0 && (
-                  <div className="text-center py-6 text-xs text-gray-400 dark:text-gray-500">
-                    No active notifications log
-                  </div>
+                  ))
                 )}
               </div>
 

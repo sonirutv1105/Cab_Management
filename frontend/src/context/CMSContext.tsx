@@ -47,6 +47,7 @@ interface CMSContextType {
   maintenanceLogs: MaintenanceLog[];
   complianceDocs: ComplianceDoc[];
   notifications: AppNotification[];
+  activePopupNotifications: AppNotification[];
   auditLogs: AuditLog[];
   settings: SystemSetting[];
 
@@ -109,15 +110,9 @@ interface CMSContextType {
 const CMSContext = createContext<CMSContextType | undefined>(undefined);
 
 export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true); // DEMO BYPASS
-  const [isInitializing, setIsInitializing] = useState<boolean>(false); // DEMO BYPASS
-  const [currentUser, setCurrentUserState] = useState<User | null>({
-    id: 'demo-admin-id',
-    name: 'Demo Admin',
-    email: 'admin@demo.com',
-    role: 'super_admin',
-    permissions: []
-  } as any); // DEMO BYPASS
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isInitializing, setIsInitializing] = useState<boolean>(true);
+  const [currentUser, setCurrentUserState] = useState<User | null>(null);
   const [activeModule, setActiveModule] = useState<ModuleType>('Dashboard');
 
   // Load States
@@ -141,8 +136,51 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Validate session on mount
   useEffect(() => {
-    // DEMO BYPASS: Disabled session validation to keep fake user logged in
-    /*
+    const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+    if (isDemoMode) {
+      localStorage.setItem('cms_token', 'demo-token');
+      localStorage.setItem('userRole', 'COMPANY_HEAD');
+      
+      const defaultPermissions = [
+        "dashboard", "driver_management", "vehicle_management", "trip_management",
+        "vendor_management", "booking_management", "live_tracking", "fuel_management",
+        "maintenance_management", "compliance_management", "contract_management",
+        "reports_analytics", "notifications", "audit_logs", "user_roles",
+        "support_tickets", "company_settings"
+      ].flatMap(module => [
+        { module, action: "view" },
+        { module, action: "create" },
+        { module, action: "update" },
+        { module, action: "delete" }
+      ]);
+
+      api.getCurrentUser()
+        .then(user => {
+          setCurrentUserState({
+            ...user,
+            permissions: user.permissions && user.permissions.length > 0 ? user.permissions : defaultPermissions
+          });
+          setIsAuthenticated(true);
+        })
+        .catch(err => {
+          console.error('Session validation failed in Demo Mode, using static fallback', err);
+          setCurrentUserState({
+            id: 1,
+            name: 'Demo Admin',
+            email: 'demo@example.com',
+            role: 'COMPANY_HEAD',
+            companyName: 'Demo Company',
+            lastActive: new Date().toISOString(),
+            permissions: defaultPermissions
+          });
+          setIsAuthenticated(true);
+        })
+        .finally(() => {
+          setIsInitializing(false);
+        });
+      return;
+    }
+
     const token = localStorage.getItem('cms_token');
     if (token) {
       api.getCurrentUser()
@@ -160,7 +198,6 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } else {
       setIsInitializing(false);
     }
-    */
   }, []);
 
   // Fetch ALL dynamic data on authentication (connects every module to backend)
@@ -201,16 +238,22 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     api.getAuditLogs().then(setAuditLogs).catch(err => console.log('Failed to fetch audit logs', err));
     api.getSettings().then(setSettings).catch(err => console.log('Failed to fetch settings', err));
+    
+    // Polling for real-time updates of external bookings
+    const intervalId = setInterval(() => {
+      api.getBookings().then(setBookings).catch(err => console.log('Failed to fetch bookings', err));
+    }, 10000);
+
+    return () => clearInterval(intervalId);
   }, [isAuthenticated]);
 
   // Helper to log changes to the audit trail
   const appendAuditLog = (action: string, module: ModuleType, details: string, status: 'Success' | 'Failed' = 'Success') => {
-    const newLog: AuditLog = {
-      id: Date.now(),
+    const logData = {
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      userId: currentUser!.id,
-      userEmail: currentUser!.email,
-      userRole: currentUser!.role,
+      userId: String(currentUser?.id || ''),
+      userEmail: currentUser?.email || 'Unknown',
+      userRole: currentUser?.role || 'Unknown',
       action,
       module,
       details,
@@ -218,11 +261,12 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       status
     };
     // Save audit log to backend
-    api.createAuditLog(newLog).then(savedLog => {
+    api.createAuditLog(logData as any).then(savedLog => {
       setAuditLogs((prev) => [savedLog, ...prev]);
     }).catch(() => {
       // Fallback: still keep it in local state if API fails
-      setAuditLogs((prev) => [newLog, ...prev]);
+      const fallbackLog: AuditLog = { ...logData, id: Date.now(), userId: currentUser?.id || 0 } as AuditLog;
+      setAuditLogs((prev) => [fallbackLog, ...prev]);
     });
   };
 
@@ -252,8 +296,6 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const hasPermission = (module: string, action: string) => {
-    return true; // DEMO BYPASS: Allow all permissions for demo purposes
-    /*
     if (currentUser?.role === 'super_admin') return true;
     if (!currentUser?.permissions) return false;
     
@@ -261,7 +303,6 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return currentUser.permissions.some(
       (p) => p.module === module && p.action === action
     );
-    */
   };
 
   const login = async (email: string, pass: string) => {
@@ -563,6 +604,8 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         'Maintenance Management',
         `Registered maintenance work tier [${savedLog.category}] for plate ${v?.plateNumber || 'Unknown'} (Budget: $${savedLog.cost})`
       );
+      // Immediately refresh vehicles to sync status dashboard
+      api.getVehicles().then(setVehicles).catch(err => console.log('Failed to fetch vehicles', err));
     }).catch(err => console.error("API Error creating maintenance log", err));
   };
 
@@ -575,22 +618,20 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         `Updated mechanical service outcomes to [${updatedLog.status}] for repair ticket: ${updatedLog.id}`
       );
 
+      // Handle lastServiceDate if completed
       if (updatedLog.status === 'Completed') {
-        // Free the vehicle status via API
         const vehicleToUpdate = vehicles.find(v => v.id === updatedLog.vehicleId);
         if (vehicleToUpdate) {
-          api.updateVehicle(vehicleToUpdate.id, { status: 'Available', lastServiceDate: updatedLog.endDate }).then(updatedVehicle => {
-            setVehicles((prev) => prev.map((v) => (v.id === updatedVehicle.id ? updatedVehicle : v)));
-          }).catch(err => console.error("API Error updating vehicle status", err));
-        }
-      } else if (updatedLog.status === 'In Progress') {
-        const vehicleToUpdate = vehicles.find(v => v.id === updatedLog.vehicleId);
-        if (vehicleToUpdate) {
-          api.updateVehicle(vehicleToUpdate.id, { status: 'Under Maintenance' }).then(updatedVehicle => {
-            setVehicles((prev) => prev.map((v) => (v.id === updatedVehicle.id ? updatedVehicle : v)));
-          }).catch(err => console.error("API Error updating vehicle status", err));
+          api.updateVehicle(vehicleToUpdate.id, { lastServiceDate: updatedLog.endDate }).then(() => {
+            // Refresh vehicles to sync status and lastServiceDate
+            api.getVehicles().then(setVehicles).catch(err => console.log('Failed to fetch vehicles', err));
+          }).catch(err => console.error("API Error updating vehicle last service date", err));
+          return;
         }
       }
+
+      // Refresh vehicles for all other status updates
+      api.getVehicles().then(setVehicles).catch(err => console.log('Failed to fetch vehicles', err));
     }).catch(err => console.error("API Error updating maintenance log", err));
   };
 
@@ -648,32 +689,24 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
-  const markAllNotificationsRead = () => {
-    const role = localStorage.getItem('userRole') || 'SUPER_ADMIN';
-    const unreadNotifs = notifications.filter(n => !n.read);
-    
-    if (role === 'COMPANY_HEAD' || role === 'COMPANY_HR') {
-      Promise.all(unreadNotifs.map(n => api.readCompanyNotification(Number(n.id)).catch(() => null))).then(() => {
-        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-        appendAuditLog('Clear Notifications counter', 'Notifications', 'User dismissed and marked all pending messages alerts read.');
-      });
-      return;
-    }
+  const activePopupNotifications = notifications.filter(n => !n.popup_dismissed);
 
-    Promise.all(unreadNotifs.map(n => api.updateNotification(n.id as any, { read: true }).catch(() => null))).then(() => {
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  const markAllNotificationsRead = () => {
+    api.markAllNotificationsRead().then(() => {
+      setNotifications((prev) => prev.map((n) => n.popup_dismissed ? n : { ...n, read: true }));
       appendAuditLog('Clear Notifications counter', 'Notifications', 'User dismissed and marked all pending messages alerts read.');
-    });
+    }).catch(console.error);
   };
 
   const clearNotifications = () => {
-    setNotifications([]);
-    appendAuditLog('Flush System Alerts log', 'Notifications', 'All general alerts historical registers fully flushed.');
+    api.clearAllNotifications().then(() => {
+      setNotifications((prev) => prev.map(n => ({ ...n, popup_dismissed: true })));
+      appendAuditLog('Flush System Alerts log', 'Notifications', 'All general alerts historical registers fully flushed.');
+    }).catch(console.error);
   };
 
   const clearAllNotifications = () => {
-    setNotifications([]);
-    appendAuditLog('Flush System Alerts log', 'Notifications', 'All general alerts historical registers fully flushed.');
+    clearNotifications();
   };
 
   const addNotification = (notifData: { title: string; message: string; targetRole?: string }) => {
@@ -747,6 +780,7 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         maintenanceLogs,
         complianceDocs,
         notifications,
+        activePopupNotifications,
         auditLogs,
         settings,
         addDriver,

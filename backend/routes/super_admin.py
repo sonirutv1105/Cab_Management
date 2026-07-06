@@ -13,6 +13,7 @@ from jose import jwt, JWTError
 from config.settings import settings
 
 from database.db import get_db
+from models import all_models as models
 from models.all_models import SuperAdmin, Company, Subscription, User, Task, Tender, Announcement, Role, Permission, AuditLog, AnnouncementRecipient
 from validations import all_schemas as schemas
 import secrets

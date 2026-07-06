@@ -82,13 +82,13 @@ export default function ContractManagementView() {
     setActiveTab('list');
   };
 
-  const handleCreateSuccess = (id: string) => {
+  const handleCreateSuccess = (id: string, isDraft?: boolean) => {
     setIsCreatingContract(false);
     setResumeId(undefined);
     const basePath = window.location.pathname.startsWith('/super-admin') ? '/super-admin' : '/';
     window.history.pushState(null, '', basePath);
     setSelectedContractId(id);
-    setActiveTab('list');
+    setActiveTab(isDraft ? 'drafts' : 'list');
   };
 
   if (isCreatingContract) {
