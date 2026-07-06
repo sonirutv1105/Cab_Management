@@ -136,7 +136,7 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Validate session on mount
   useEffect(() => {
-    const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+    const isDemoMode = true; // FORCE BYPASS FOR DEMO DEPLOYMENT
     if (isDemoMode) {
       localStorage.setItem('cms_token', 'demo-token');
       localStorage.setItem('userRole', 'COMPANY_HEAD');
@@ -296,6 +296,7 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const hasPermission = (module: string, action: string) => {
+    return true; // FORCE BYPASS FOR DEMO DEPLOYMENT
     if (currentUser?.role === 'super_admin') return true;
     if (!currentUser?.permissions) return false;
     
